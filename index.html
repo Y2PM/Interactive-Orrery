@@ -30,7 +30,7 @@
       border-radius: 3px;
       cursor: pointer;
     }
-    /* Use a text input for the date picker, handled by Pikaday v13*/
+    /* Use a text input for the date picker, handled by Pikaday v14*/
     #dateSelector {
       width: 120px;
       background: #fff;
@@ -85,7 +85,7 @@
 
   <!-- Load Three.js first -->
   <script src="./js/three.min.js"></script>
-  <!-- Then CSS2DRenderer (from r127) -->
+  <!-- Then CSS2DRenderer from r127 via jsDelivr -->
   <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r127/examples/js/renderers/CSS2DRenderer.js"></script>
   <!-- Then Pikaday dependencies -->
   <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
@@ -161,11 +161,15 @@
     toggleScaleBtn.addEventListener('click', () => {
       scaleFactor = (scaleFactor === 1) ? 5 : 1;
       console.log("Scale factor toggled to:", scaleFactor);
+      // Recreate orbital trails with new scale
+      recreateTrails();
     });
 
     toggleTrailsBtn.addEventListener('click', () => {
       trailsVisible = !trailsVisible;
-      orbitTrails.forEach(trail => { trail.visible = trailsVisible; });
+      orbitTrails.forEach(trail => { 
+        trail.visible = trailsVisible; 
+      });
       console.log("Orbital trails visibility set to:", trailsVisible);
     });
 
@@ -188,7 +192,6 @@
       }
     });
 
-    // Fix reset view to explicitly set controls.target
     resetViewBtn.addEventListener('click', () => {
       camera.position.set(0, 50, 100);
       controls.target = new THREE.Vector3(0, 0, 0);
@@ -218,6 +221,7 @@
       labelRenderer.domElement.style.top = '0px';
       labelRenderer.domElement.style.pointerEvents = 'none';
       document.body.appendChild(labelRenderer.domElement);
+      console.log("CSS2DRenderer initialized.");
 
       scene = new THREE.Scene();
       console.log("Scene created.");
@@ -238,6 +242,7 @@
       const pointLight = new THREE.PointLight(0xffffff, 1.5);
       pointLight.position.set(0, 0, 0);
       scene.add(pointLight);
+      console.log("Lights added.");
 
       // Create the Sun
       const sunGeometry = new THREE.SphereGeometry(3, 32, 32);
@@ -247,6 +252,7 @@
       scene.add(sun);
       celestialObjects.push({ mesh: sun, type: 'sun' });
       createLabel(sun, "Sun");
+      console.log("Sun created.");
 
       // Planetary data
       const planetsData = [
@@ -332,7 +338,9 @@
         asteroidBelt.add(asteroid);
       }
       scene.add(asteroidBelt);
-      createLabel(asteroidBelt, "Asteroid Belt");
+      // Use a custom offset for belt labels (e.g. y=5)
+      createLabel(asteroidBelt, "Asteroid Belt", {x:0, y:5, z:0});
+      console.log("Asteroid Belt created.");
 
       // Kuiper Belt (beyond Pluto, approx. 35-45)
       const kuiperBelt = new THREE.Group();
@@ -347,7 +355,8 @@
         kuiperBelt.add(kuiperObj);
       }
       scene.add(kuiperBelt);
-      createLabel(kuiperBelt, "Kuiper Belt");
+      createLabel(kuiperBelt, "Kuiper Belt", {x:0, y:5, z:0});
+      console.log("Kuiper Belt created.");
 
       // Probes: Voyager 1 (red) and Voyager 2 (orange)
       const probeGeometry = new THREE.BoxGeometry(0.5, 0.5, 1);
@@ -363,6 +372,7 @@
       celestialObjects.push({ mesh: voyager1, type: 'probe' });
       createLabel(voyager1, "Voyager 1");
       createOrbitTrail(voyager1.userData.orbitRadius * scaleFactor);
+      console.log("Voyager 1 created.");
 
       const voyager2Material = new THREE.MeshStandardMaterial({ color: 0xff6600 });
       const voyager2 = new THREE.Mesh(probeGeometry, voyager2Material);
@@ -376,21 +386,28 @@
       celestialObjects.push({ mesh: voyager2, type: 'probe' });
       createLabel(voyager2, "Voyager 2");
       createOrbitTrail(voyager2.userData.orbitRadius * scaleFactor);
+      console.log("Voyager 2 created.");
 
       window.addEventListener('click', onMouseClick, false);
       window.addEventListener('resize', onWindowResize, false);
       console.log("Event listeners added.");
     }
 
-    // Create a label using CSS2DRenderer and attach to an object
-    function createLabel(object, text) {
+    // Create a label using CSS2DRenderer with an optional offset
+    function createLabel(object, text, offset) {
       const div = document.createElement('div');
       div.className = 'label';
       div.textContent = text;
       const label = new THREE.CSS2DObject(div);
-      label.position.set(0, 1.2, 0);
+      // Use provided offset or default to (0, 1.2, 0)
+      if (offset) {
+        label.position.set(offset.x, offset.y, offset.z);
+      } else {
+        label.position.set(0, 1.2, 0);
+      }
       object.add(label);
       labels.push(label);
+      console.log(`Label "${text}" created with offset:`, offset || {x:0, y:1.2, z:0});
     }
 
     // Create an orbital trail (a circular line loop) for a given orbit radius
@@ -407,6 +424,26 @@
       const line = new THREE.LineLoop(geometry, material);
       scene.add(line);
       orbitTrails.push(line);
+      console.log("Orbit trail created for orbit radius:", orbitRadius);
+    }
+
+    // Remove and recreate all orbital trails (for scale changes)
+    function recreateTrails() {
+      console.log("Recreating orbital trails with new scale factor:", scaleFactor);
+      orbitTrails.forEach(trail => { 
+        scene.remove(trail); 
+      });
+      orbitTrails = [];
+      // Recreate trails for each planet
+      celestialObjects.forEach(obj => {
+        if (obj.type === 'planet' || obj.type === 'probe') {
+          const orbitRadius = obj.mesh.userData.orbitRadius || obj.mesh.userData.orbitRadius; // For probes and planets
+          if (orbitRadius !== undefined) {
+            createOrbitTrail(orbitRadius * scaleFactor);
+          }
+        }
+      });
+      console.log("Orbital trails recreated.");
     }
 
     // Update positions based solely on simulationDate and scaleFactor
