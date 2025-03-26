@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Interactive Orrery - with Calendar Picker & Kuiper Belt</title>
+  <title>Enhanced Interactive Orrery</title>
   <style>
     body {
       margin: 0;
@@ -15,8 +15,8 @@
       position: absolute;
       top: 10px;
       left: 10px;
-      z-index: 10;
-      background: rgba(0, 0, 0, 0.5);
+      z-index: 20;
+      background: rgba(0, 0, 0, 0.7);
       padding: 10px;
       border-radius: 5px;
     }
@@ -30,8 +30,7 @@
       border-radius: 3px;
       cursor: pointer;
     }
-    /* We no longer rely on type="date" since Safari won't show a dropdown. v10
-       Instead we use Pikaday, so we do <input type="text"> and let Pikaday handle the calendar. */
+    /* Using text input for the date picker (to be handled by Pikaday) v11*/
     #dateSelector {
       width: 120px;
       background: #fff;
@@ -48,14 +47,19 @@
       background-color: #202020;
       color: #fff;
     }
+    /* Style for label divs */
+    .label {
+      font-size: 14px;
+      font-family: sans-serif;
+      color: #fff;
+      background-color: rgba(0, 0, 0, 0.6);
+      padding: 2px 4px;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
   </style>
-
-  <!-- Pikaday CSS -->
+  <!-- Pikaday CSS for date picker -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pikaday/css/pikaday.css">
-  <!-- Moment.js (required by Pikaday for date formatting) -->
-  <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
-  <!-- Pikaday for a cross-browser date picker -->
-  <script src="https://cdn.jsdelivr.net/npm/pikaday@1.8.2/pikaday.js"></script>
 </head>
 <body>
   <div id="controls">
@@ -69,69 +73,78 @@
       <input type="range" id="timeSlider" min="0" max="3650" step="1" value="0">
     </div>
     <div>
+      <button id="playPauseBtn">Play</button>
+      <button id="toggleScaleBtn">Toggle Scale</button>
+      <button id="toggleTrailsBtn">Toggle Trails</button>
+      <button id="toggleLabelsBtn">Toggle Labels</button>
       <button id="darkModeToggle">Toggle Dark Mode</button>
       <button id="resetViewBtn">Reset View</button>
     </div>
   </div>
-
   <canvas id="canvas"></canvas>
 
-  <!-- Three.js and OrbitControls (non-module, from r127) -->
+  <!-- CSS2DRenderer for labels -->
+  <script src="https://threejs.org/examples/js/renderers/CSS2DRenderer.js"></script>
+  <!-- Moment.js and Pikaday for the calendar -->
+  <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pikaday@1.8.2/pikaday.js"></script>
+  <!-- Three.js and OrbitControls from branch 127 (non-module) -->
   <script src="./js/three.min.js"></script>
   <script src="./js/controls/OrbitControls.js"></script>
 
   <script>
-    console.log("Three.js and OrbitControls loaded.");
+    console.log("Three.js, OrbitControls, and auxiliary libraries loaded.");
 
-    // Quick checks
-    if (typeof THREE === "undefined") {
-      console.error("THREE is not loaded!");
-    }
-    if (typeof THREE.OrbitControls === "undefined") {
-      console.error("OrbitControls are not loaded!");
-    }
+    // Check for THREE and OrbitControls
+    if (typeof THREE === "undefined") { console.error("THREE is not loaded!"); }
+    if (typeof THREE.OrbitControls === "undefined") { console.error("OrbitControls are not loaded!"); }
 
-    // Core variables
-    let scene, camera, renderer, controls;
+    // Global variables
+    let scene, camera, renderer, controls, labelRenderer;
     let raycaster, mouse;
     let celestialObjects = [];
-    const baseDate = new Date("2000-01-01T00:00:00"); // Reference epoch
+    let orbitTrails = []; // for orbital paths
+    let labels = []; // for CSS2DObjects
+    const baseDate = new Date("2000-01-01T00:00:00");
     let simulationDate = new Date();
-    const oneDay = 1000 * 60 * 60 * 24; // 1 day in ms
+    const oneDay = 1000 * 60 * 60 * 24;
+    let timePaused = true;
+    let playSpeed = 2; // days per frame when playing
+    let scaleFactor = 1; // 1 for realistic, 5 for exaggerated
+    let trailsVisible = true;
+    let labelsVisible = true;
 
     // DOM elements
+    const dateField = document.getElementById('dateSelector');
     const currentDateBtn = document.getElementById('currentDateBtn');
     const timeSlider = document.getElementById('timeSlider');
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    const toggleScaleBtn = document.getElementById('toggleScaleBtn');
+    const toggleTrailsBtn = document.getElementById('toggleTrailsBtn');
+    const toggleLabelsBtn = document.getElementById('toggleLabelsBtn');
     const darkModeToggle = document.getElementById('darkModeToggle');
     const resetViewBtn = document.getElementById('resetViewBtn');
-    const dateField = document.getElementById('dateSelector');
 
-    // PIKADAY: cross-browser date picker
+    // Initialize Pikaday date picker
     let pikaday = new Pikaday({
       field: dateField,
       format: 'YYYY-MM-DD',
       onSelect: function(date) {
-        // Update the simulation date and slider whenever user picks from calendar
         simulationDate = date;
         const daysOffset = Math.floor((simulationDate - baseDate) / oneDay);
         timeSlider.value = daysOffset;
-        console.log("Date changed via Pikaday to:", simulationDate);
+        console.log("Date selected via calendar:", simulationDate);
       }
     });
-
-    // Set initial date in the date picker
-    pikaday.setDate(simulationDate, true); // 'true' to not trigger onSelect
-
-    // Sync the slider to the current date
+    pikaday.setDate(simulationDate, true);
     timeSlider.value = Math.floor((simulationDate - baseDate) / oneDay);
 
-    // Listen for manual changes on the slider
+    // Slider event
     timeSlider.addEventListener('input', () => {
       const daysOffset = parseInt(timeSlider.value);
       simulationDate = new Date(baseDate.getTime() + daysOffset * oneDay);
-      // Also update the date picker
       pikaday.setDate(simulationDate, true);
-      console.log("Time slider updated simulation date to:", simulationDate);
+      console.log("Time slider set simulation date to:", simulationDate);
     });
 
     // "Today" button
@@ -140,6 +153,35 @@
       pikaday.setDate(simulationDate, true);
       timeSlider.value = Math.floor((simulationDate - baseDate) / oneDay);
       console.log("Simulation date reset to current date:", simulationDate);
+    });
+
+    // Play/Pause button
+    playPauseBtn.addEventListener('click', () => {
+      timePaused = !timePaused;
+      playPauseBtn.textContent = timePaused ? "Play" : "Pause";
+      console.log("Time control toggled. Paused:", timePaused);
+    });
+
+    // Toggle Scale button
+    toggleScaleBtn.addEventListener('click', () => {
+      scaleFactor = (scaleFactor === 1) ? 5 : 1;
+      console.log("Scale factor toggled to:", scaleFactor);
+    });
+
+    // Toggle Trails button
+    toggleTrailsBtn.addEventListener('click', () => {
+      trailsVisible = !trailsVisible;
+      orbitTrails.forEach(trail => { trail.visible = trailsVisible; });
+      console.log("Orbital trails visibility set to:", trailsVisible);
+    });
+
+    // Toggle Labels button
+    toggleLabelsBtn.addEventListener('click', () => {
+      labelsVisible = !labelsVisible;
+      labels.forEach(label => {
+        label.element.style.display = labelsVisible ? 'block' : 'none';
+      });
+      console.log("Labels visibility set to:", labelsVisible);
     });
 
     // Dark mode toggle
@@ -154,14 +196,14 @@
       }
     });
 
-    // Reset view
+    // Reset view button
     resetViewBtn.addEventListener('click', () => {
       camera.position.set(0, 50, 100);
       controls.target.set(0, 0, 0);
       console.log("View reset to default.");
     });
 
-    // Init Three.js scene
+    // Initialize Three.js scene, label renderer, etc.
     init();
     animate();
 
@@ -177,6 +219,14 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setClearColor(0x202020);
       console.log("Renderer created.");
+
+      // Set up CSS2DRenderer for labels
+      labelRenderer = new THREE.CSS2DRenderer();
+      labelRenderer.setSize(window.innerWidth, window.innerHeight);
+      labelRenderer.domElement.style.position = 'absolute';
+      labelRenderer.domElement.style.top = '0px';
+      labelRenderer.domElement.style.pointerEvents = 'none';
+      document.body.appendChild(labelRenderer.domElement);
 
       scene = new THREE.Scene();
       console.log("Scene created.");
@@ -195,9 +245,8 @@
       // Lighting
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
       scene.add(ambientLight);
-
       const pointLight = new THREE.PointLight(0xffffff, 1.5);
-      pointLight.position.set(0, 0, 0); // Our "Sun" is the light source
+      pointLight.position.set(0, 0, 0);
       scene.add(pointLight);
 
       // Create the Sun
@@ -207,31 +256,32 @@
       sun.name = "Sun";
       scene.add(sun);
       celestialObjects.push({ mesh: sun, type: 'sun' });
+      createLabel(sun, "Sun");
 
-      // Planet data
+      // Define planetary data
       const planetsData = [
-        { name: "Mercury", radius: 4,  period: 88,   size: 0.5, color: 0xaaaaaa, moons: [] },
-        { name: "Venus",   radius: 7,  period: 225,  size: 0.8, color: 0xffcc66, moons: [] },
-        { name: "Earth",   radius: 10, period: 365,  size: 0.9, color: 0x2233ff, moons: [
-            { name: "Moon", orbit: 1.5, period: 27,   size: 0.3, color: 0x888888 }
+        { name: "Mercury", radius: 4, period: 88, size: 0.5, color: 0xaaaaaa, moons: [] },
+        { name: "Venus",   radius: 7, period: 225, size: 0.8, color: 0xffcc66, moons: [] },
+        { name: "Earth",   radius: 10, period: 365, size: 0.9, color: 0x2233ff, moons: [
+            { name: "Moon", orbit: 1.5, period: 27, size: 0.3, color: 0x888888 }
           ] },
-        { name: "Mars",    radius: 13, period: 687,  size: 0.7, color: 0xff3300, moons: [
-            { name: "Phobos", orbit: 1,   period: 0.3, size: 0.15, color: 0x999999 },
-            { name: "Deimos", orbit: 1.5, period: 1.3, size: 0.1,  color: 0xbbbbbb }
+        { name: "Mars",    radius: 13, period: 687, size: 0.7, color: 0xff3300, moons: [
+            { name: "Phobos", orbit: 1, period: 0.3, size: 0.15, color: 0x999999 },
+            { name: "Deimos", orbit: 1.5, period: 1.3, size: 0.1, color: 0xbbbbbb }
           ] },
-        { name: "Jupiter", radius: 17, period: 4333, size: 2,   color: 0xffaa77, moons: [
-            { name: "Io",       orbit: 2.5, period: 1.8,  size: 0.3,  color: 0xffddaa },
-            { name: "Europa",   orbit: 3,   period: 3.5,  size: 0.28, color: 0xffffff },
-            { name: "Ganymede", orbit: 3.5, period: 7,    size: 0.4,  color: 0xcccccc },
-            { name: "Callisto", orbit: 4,   period: 16,   size: 0.35, color: 0x999999 }
+        { name: "Jupiter", radius: 17, period: 4333, size: 2, color: 0xffaa77, moons: [
+            { name: "Io", orbit: 2.5, period: 1.8, size: 0.3, color: 0xffddaa },
+            { name: "Europa", orbit: 3, period: 3.5, size: 0.28, color: 0xffffff },
+            { name: "Ganymede", orbit: 3.5, period: 7, size: 0.4, color: 0xcccccc },
+            { name: "Callisto", orbit: 4, period: 16, size: 0.35, color: 0x999999 }
           ] },
         { name: "Saturn",  radius: 21, period: 10759, size: 1.8, color: 0xffeeaa, moons: [
-            { name: "Titan",     orbit: 3, period: 16,  size: 0.4, color: 0xffcc99 },
+            { name: "Titan", orbit: 3, period: 16, size: 0.4, color: 0xffcc99 },
             { name: "Enceladus", orbit: 2, period: 1.4, size: 0.2, color: 0xdddddd }
           ] },
         { name: "Uranus",  radius: 25, period: 30687, size: 1.5, color: 0x66ccff, moons: [
-            { name: "Titania", orbit: 2.5, period: 8,  size: 0.3, color: 0xccccff },
-            { name: "Oberon",  orbit: 3,   period: 12, size: 0.3, color: 0xbbbbff }
+            { name: "Titania", orbit: 2.5, period: 8, size: 0.3, color: 0xccccff },
+            { name: "Oberon", orbit: 3, period: 12, size: 0.3, color: 0xbbbbff }
           ] },
         { name: "Neptune", radius: 29, period: 60190, size: 1.5, color: 0x3366ff, moons: [
             { name: "Triton", orbit: 3, period: 5, size: 0.35, color: 0x9999ff }
@@ -241,7 +291,7 @@
           ] }
       ];
 
-      // Create planets
+      // Create planets and their moons
       planetsData.forEach(planet => {
         const planetGroup = new THREE.Group();
         const geometry = new THREE.SphereGeometry(planet.size, 32, 32);
@@ -249,71 +299,97 @@
         const planetMesh = new THREE.Mesh(geometry, material);
         planetMesh.name = planet.name;
         planetGroup.add(planetMesh);
-
         planetGroup.userData = {
           orbitRadius: planet.radius,
           orbitalPeriod: planet.period,
           initialAngle: Math.random() * Math.PI * 2,
           moons: []
         };
-
-        // Moons
+        createLabel(planetMesh, planet.name);
         planet.moons.forEach(moon => {
           const moonGeometry = new THREE.SphereGeometry(moon.size, 16, 16);
           const moonMaterial = new THREE.MeshStandardMaterial({ color: moon.color });
           const moonMesh = new THREE.Mesh(moonGeometry, moonMaterial);
           moonMesh.position.x = moon.orbit;
           moonMesh.name = moon.name;
+          createLabel(moonMesh, moon.name);
           const moonPivot = new THREE.Group();
           moonPivot.add(moonMesh);
-
           moonPivot.userData = {
             orbitRadius: moon.orbit,
             orbitalPeriod: moon.period,
             initialAngle: Math.random() * Math.PI * 2
           };
-
           planetGroup.add(moonPivot);
           planetGroup.userData.moons.push(moonPivot);
           console.log(`Moon ${moon.name} added to planet ${planet.name}.`);
         });
-
         scene.add(planetGroup);
         celestialObjects.push({ mesh: planetGroup, type: 'planet', data: planet });
         console.log(`Planet ${planet.name} created with orbit radius ${planet.radius}.`);
+        // Create an orbital trail for the planet
+        createOrbitTrail(planetGroup.userData.orbitRadius);
       });
 
-      // "Kuiper Belt" or "Asteroid Belt" (whichever you prefer) out beyond Pluto:
-      const beltGroup = new THREE.Group();
-      const beltCount = 100;
-      for (let i = 0; i < beltCount; i++) {
-        const asteroidGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+      // Create the Asteroid Belt (between Mars and Jupiter, approx. 15-17)
+      const asteroidBelt = new THREE.Group();
+      const asteroidCount = 100;
+      for (let i = 0; i < asteroidCount; i++) {
+        const asteroidGeometry = new THREE.SphereGeometry(0.07, 6, 6);
         const asteroidMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
         const asteroid = new THREE.Mesh(asteroidGeometry, asteroidMaterial);
-
-        // Place them between 35 and 40 radius (beyond Pluto at 33)
         const angle = Math.random() * Math.PI * 2;
-        const distance = 35 + Math.random() * 5; 
-        asteroid.position.set(distance * Math.cos(angle), (Math.random() - 0.5) * 1, distance * Math.sin(angle));
-
-        beltGroup.add(asteroid);
+        const distance = 15 + Math.random() * 2; // 15 to 17
+        asteroid.position.set(distance * Math.cos(angle), (Math.random() - 0.5) * 0.5, distance * Math.sin(angle));
+        asteroidBelt.add(asteroid);
       }
-      scene.add(beltGroup);
-      console.log(`"Kuiper" belt created with ${beltCount} objects.`);
+      scene.add(asteroidBelt);
+      createLabel(asteroidBelt, "Asteroid Belt");
 
-      // Voyager probe (the red lego block)
+      // Create the Kuiper Belt (beyond Pluto, approx. 35-45)
+      const kuiperBelt = new THREE.Group();
+      const kuiperCount = 150;
+      for (let i = 0; i < kuiperCount; i++) {
+        const kuiperGeom = new THREE.SphereGeometry(0.08, 6, 6);
+        const kuiperMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa });
+        const kuiperObj = new THREE.Mesh(kuiperGeom, kuiperMat);
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 35 + Math.random() * 10; // 35 to 45
+        kuiperObj.position.set(distance * Math.cos(angle), (Math.random() - 0.5) * 1, distance * Math.sin(angle));
+        kuiperBelt.add(kuiperObj);
+      }
+      scene.add(kuiperBelt);
+      createLabel(kuiperBelt, "Kuiper Belt");
+
+      // Add Voyager probe (red block) and a second probe Voyager 2 (orange block)
       const probeGeometry = new THREE.BoxGeometry(0.5, 0.5, 1);
-      const probeMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-      const probe = new THREE.Mesh(probeGeometry, probeMaterial);
-      probe.name = "Voyager"; // The red block
-      probe.userData = {
-        orbitRadius: 38,         // Just beyond Pluto
-        orbitalPeriod: 150000,   // Arbitrary slow orbit
+      const voyagerMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+      const voyager = new THREE.Mesh(probeGeometry, voyagerMaterial);
+      voyager.name = "Voyager 1";
+      voyager.userData = {
+        orbitRadius: 38,
+        orbitalPeriod: 150000,
         initialAngle: Math.random() * Math.PI * 2
       };
-      scene.add(probe);
-      celestialObjects.push({ mesh: probe, type: 'probe' });
-      console.log("Probe 'Voyager' added to the scene.");
+      scene.add(voyager);
+      celestialObjects.push({ mesh: voyager, type: 'probe' });
+      createLabel(voyager, "Voyager 1");
+
+      const voyager2Material = new THREE.MeshStandardMaterial({ color: 0xff6600 });
+      const voyager2 = new THREE.Mesh(probeGeometry, voyager2Material);
+      voyager2.name = "Voyager 2";
+      voyager2.userData = {
+        orbitRadius: 42,
+        orbitalPeriod: 160000,
+        initialAngle: Math.random() * Math.PI * 2
+      };
+      scene.add(voyager2);
+      celestialObjects.push({ mesh: voyager2, type: 'probe' });
+      createLabel(voyager2, "Voyager 2");
+
+      // Create orbital trails for probes as well
+      createOrbitTrail(voyager.userData.orbitRadius);
+      createOrbitTrail(voyager2.userData.orbitRadius);
 
       // Event listeners
       window.addEventListener('click', onMouseClick, false);
@@ -321,20 +397,44 @@
       console.log("Event listeners added.");
     }
 
-    // Recalculate positions based on the simulation date
+    // Create a label for an object and attach it using CSS2DRenderer
+    function createLabel(object, text) {
+      const div = document.createElement('div');
+      div.className = 'label';
+      div.textContent = text;
+      const label = new THREE.CSS2DObject(div);
+      // Position the label above the object
+      label.position.set(0, 1.2, 0);
+      object.add(label);
+      labels.push(label);
+    }
+
+    // Create an orbital trail (circle) for a given orbit radius (applied with scaleFactor)
+    function createOrbitTrail(orbitRadius) {
+      const segments = 64;
+      const geometry = new THREE.BufferGeometry();
+      const positions = [];
+      for (let i = 0; i <= segments; i++) {
+        const theta = (i / segments) * Math.PI * 2;
+        positions.push(orbitRadius * Math.cos(theta), 0, orbitRadius * Math.sin(theta));
+      }
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      const material = new THREE.LineBasicMaterial({ color: 0xffffff, opacity: 0.3, transparent: true });
+      const line = new THREE.LineLoop(geometry, material);
+      scene.add(line);
+      orbitTrails.push(line);
+    }
+
+    // Update positions based solely on simulationDate and scaleFactor.
     function updatePositions() {
       const diffTime = simulationDate - baseDate;
       const diffDays = diffTime / oneDay;
-
       scene.traverse(child => {
-        // Planets or groups with orbit data
         if (child.type === "Group" && child.userData.orbitRadius) {
-          const orbitRadius = child.userData.orbitRadius;
+          const orbitRadius = child.userData.orbitRadius * scaleFactor;
           const period = child.userData.orbitalPeriod;
           const angle = child.userData.initialAngle + (2 * Math.PI * (diffDays / period));
           child.position.set(orbitRadius * Math.cos(angle), 0, orbitRadius * Math.sin(angle));
-
-          // Moons revolve around their planet
           if (child.userData.moons) {
             child.userData.moons.forEach(moonPivot => {
               const mPeriod = moonPivot.userData.orbitalPeriod;
@@ -343,9 +443,8 @@
             });
           }
         }
-        // Probe orbit
-        if (child.userData.orbitRadius && child.name === "Voyager") {
-          const orbitRadius = child.userData.orbitRadius;
+        if (child.userData.orbitRadius && (child.name === "Voyager 1" || child.name === "Voyager 2")) {
+          const orbitRadius = child.userData.orbitRadius * scaleFactor;
           const period = child.userData.orbitalPeriod;
           const angle = child.userData.initialAngle + (2 * Math.PI * (diffDays / period));
           child.position.set(orbitRadius * Math.cos(angle), 0, orbitRadius * Math.sin(angle));
@@ -365,15 +464,12 @@
         const targetPosition = new THREE.Vector3();
         obj.getWorldPosition(targetPosition);
         console.log("Clicked object:", obj.name, "at", targetPosition);
-
-        // Smooth camera move
         const direction = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
         const newCameraPos = targetPosition.clone().add(direction.multiplyScalar(10));
         let t = 0;
         const duration = 60;
         const initialPos = camera.position.clone();
         const initialTarget = controls.target.clone();
-
         function animateCamera() {
           t++;
           const factor = t / duration;
@@ -393,14 +489,24 @@
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+      labelRenderer.setSize(window.innerWidth, window.innerHeight);
       console.log("Window resized. New dimensions:", window.innerWidth, window.innerHeight);
     }
 
+    // Animation loop: update simulation time (if not paused), positions, and render both renderers.
     function animate() {
       requestAnimationFrame(animate);
+      if (!timePaused) {
+        // Advance simulation time by playSpeed days per frame
+        simulationDate = new Date(simulationDate.getTime() + playSpeed * oneDay);
+        const daysOffset = Math.floor((simulationDate - baseDate) / oneDay);
+        timeSlider.value = daysOffset;
+        pikaday.setDate(simulationDate, true);
+      }
       updatePositions();
       controls.update();
       renderer.render(scene, camera);
+      labelRenderer.render(scene, camera);
     }
   </script>
 </body>
