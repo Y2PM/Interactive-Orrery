@@ -30,7 +30,7 @@
       border-radius: 3px;
       cursor: pointer;
     }
-    /* Use a text input for the date picker, handled by Pikaday v15*/
+    /* Use a text input for the date picker, handled by Pikaday v16*/
     #dateSelector {
       width: 120px;
       background: #fff;
@@ -164,9 +164,7 @@
     toggleScaleBtn.addEventListener('click', () => {
       scaleFactor = (scaleFactor === 1) ? 5 : 1;
       console.log("Scale factor toggled to:", scaleFactor);
-      // Recreate orbital trails for celestial objects
       recreateTrails();
-      // Update belts scale
       if (asteroidBeltGroup) {
         asteroidBeltGroup.scale.set(scaleFactor, scaleFactor, scaleFactor);
         console.log("Asteroid Belt scale updated to:", scaleFactor);
@@ -188,7 +186,7 @@
     toggleLabelsBtn.addEventListener('click', () => {
       labelsVisible = !labelsVisible;
       labels.forEach(label => {
-        label.element.style.display = labelsVisible ? 'block' : 'none';
+        label.element.style.visibility = labelsVisible ? 'visible' : 'hidden';
       });
       console.log("Labels visibility set to:", labelsVisible);
     });
@@ -210,6 +208,21 @@
       console.log("View reset to default.");
     });
 
+    // Use mousedown/up on canvas to detect clicks (avoid triggering on drag)
+    let clickStart = { x: 0, y: 0 };
+    const canvas = document.getElementById('canvas');
+    canvas.addEventListener('mousedown', (event) => {
+      clickStart.x = event.clientX;
+      clickStart.y = event.clientY;
+    });
+    canvas.addEventListener('mouseup', (event) => {
+      const dx = event.clientX - clickStart.x;
+      const dy = event.clientY - clickStart.y;
+      if (Math.sqrt(dx * dx + dy * dy) < 5) {
+        onMouseClick(event);
+      }
+    });
+
     init();
     animate();
 
@@ -226,7 +239,6 @@
       renderer.setClearColor(0x202020);
       console.log("Renderer created.");
 
-      // Set up CSS2DRenderer for labels
       labelRenderer = new THREE.CSS2DRenderer();
       labelRenderer.setSize(window.innerWidth, window.innerHeight);
       labelRenderer.domElement.style.position = 'absolute';
@@ -350,7 +362,6 @@
         asteroidBeltGroup.add(asteroid);
       }
       scene.add(asteroidBeltGroup);
-      // For the belt labels, use offsets to position them near the average orbit
       createLabel(asteroidBeltGroup, "Asteroid Belt", {x:16, y:5, z:0});
       console.log("Asteroid Belt created.");
 
@@ -400,18 +411,16 @@
       createOrbitTrail(voyager2.userData.orbitRadius * scaleFactor);
       console.log("Voyager 2 created.");
 
-      window.addEventListener('click', onMouseClick, false);
       window.addEventListener('resize', onWindowResize, false);
       console.log("Event listeners added.");
     }
 
-    // Create a label using CSS2DRenderer and attach it to an object
+    // Create a label using CSS2DRenderer and attach it to an object, with optional offset
     function createLabel(object, text, offset) {
       const div = document.createElement('div');
       div.className = 'label';
       div.textContent = text;
       const label = new THREE.CSS2DObject(div);
-      // Use provided offset or default to (0, 1.2, 0)
       if (offset) {
         label.position.set(offset.x, offset.y, offset.z);
       } else {
