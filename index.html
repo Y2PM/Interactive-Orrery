@@ -30,7 +30,7 @@
       border-radius: 3px;
       cursor: pointer;
     }
-    /* Use a text input for the date picker, handled by Pikaday v16*/
+    /* Use a text input for the date picker, handled by Pikaday v17*/
     #dateSelector {
       width: 120px;
       background: #fff;
@@ -208,7 +208,7 @@
       console.log("View reset to default.");
     });
 
-    // Use mousedown/up on canvas to detect clicks (avoid triggering on drag)
+    // Use mousedown/up on canvas to detect clicks (to avoid triggering during drag)
     let clickStart = { x: 0, y: 0 };
     const canvas = document.getElementById('canvas');
     canvas.addEventListener('mousedown', (event) => {
@@ -223,6 +223,7 @@
       }
     });
 
+    // Initialize the scene and start animation
     init();
     animate();
 
@@ -381,34 +382,35 @@
       createLabel(kuiperBeltGroup, "Kuiper Belt", {x:40, y:5, z:0});
       console.log("Kuiper Belt created.");
 
-      // Probes: Voyager 1 (red) and Voyager 2 (orange)
+      // Probes: Voyager 1 and Voyager 2 with escape trajectories
       const probeGeometry = new THREE.BoxGeometry(0.5, 0.5, 1);
+      // Voyager 1
       const voyager1Material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
       const voyager1 = new THREE.Mesh(probeGeometry, voyager1Material);
       voyager1.name = "Voyager 1";
-      voyager1.userData = {
-        orbitRadius: 38,
-        orbitalPeriod: 150000,
-        initialAngle: Math.random() * Math.PI * 2
-      };
+      voyager1.userData.launchDate = new Date("1977-09-05");
+      // Set initial position (assume along positive x)
+      voyager1.userData.initialPosition = new THREE.Vector3(38 * scaleFactor, 0, 0);
+      // Set a constant velocity vector (escape trajectory upward)
+      voyager1.userData.velocity = new THREE.Vector3(0, 0.02, 0);
       scene.add(voyager1);
       celestialObjects.push({ mesh: voyager1, type: 'probe' });
-      createLabel(voyager1, "Voyager 1");
-      createOrbitTrail(voyager1.userData.orbitRadius * scaleFactor);
+      createLabel(voyager1, "Voyager 1 Escape Path");
+      createVoyagerTrajectory(voyager1);
       console.log("Voyager 1 created.");
 
+      // Voyager 2
       const voyager2Material = new THREE.MeshStandardMaterial({ color: 0xff6600 });
       const voyager2 = new THREE.Mesh(probeGeometry, voyager2Material);
       voyager2.name = "Voyager 2";
-      voyager2.userData = {
-        orbitRadius: 42,
-        orbitalPeriod: 160000,
-        initialAngle: Math.random() * Math.PI * 2
-      };
+      voyager2.userData.launchDate = new Date("1977-08-20");
+      voyager2.userData.initialPosition = new THREE.Vector3(42 * scaleFactor, 0, 0);
+      // Set a constant velocity vector (escape trajectory downward)
+      voyager2.userData.velocity = new THREE.Vector3(0, -0.02, 0);
       scene.add(voyager2);
       celestialObjects.push({ mesh: voyager2, type: 'probe' });
-      createLabel(voyager2, "Voyager 2");
-      createOrbitTrail(voyager2.userData.orbitRadius * scaleFactor);
+      createLabel(voyager2, "Voyager 2 Escape Path");
+      createVoyagerTrajectory(voyager2);
       console.log("Voyager 2 created.");
 
       window.addEventListener('resize', onWindowResize, false);
@@ -448,6 +450,17 @@
       console.log("Orbit trail created for orbit radius:", orbitRadius);
     }
 
+    // Create a trajectory line for a Voyager probe (from its initialPosition to its current position)
+    function createVoyagerTrajectory(probe) {
+      const points = [probe.userData.initialPosition.clone(), probe.position.clone()];
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineBasicMaterial({ color: 0xffff00 });
+      const trajectoryLine = new THREE.Line(geometry, material);
+      scene.add(trajectoryLine);
+      probe.userData.trajectoryLine = trajectoryLine;
+      console.log(`Trajectory line created for ${probe.name}`);
+    }
+
     // Remove and recreate all orbital trails (for scale changes)
     function recreateTrails() {
       console.log("Recreating orbital trails with new scale factor:", scaleFactor);
@@ -456,7 +469,7 @@
       });
       orbitTrails = [];
       celestialObjects.forEach(obj => {
-        if (obj.type === 'planet' || obj.type === 'probe') {
+        if (obj.type === 'planet') {
           const orbitRadius = obj.mesh.userData.orbitRadius;
           if (orbitRadius !== undefined) {
             createOrbitTrail(orbitRadius * scaleFactor);
@@ -466,7 +479,7 @@
       console.log("Orbital trails recreated.");
     }
 
-    // Update positions based solely on simulationDate and scaleFactor
+    // Update positions based on simulationDate and scaleFactor
     function updatePositions() {
       const diffTime = simulationDate - baseDate;
       const diffDays = diffTime / oneDay;
@@ -484,11 +497,23 @@
             });
           }
         }
-        if (child.userData.orbitRadius && (child.name === "Voyager 1" || child.name === "Voyager 2")) {
-          const orbitRadius = child.userData.orbitRadius * scaleFactor;
-          const period = child.userData.orbitalPeriod;
-          const angle = child.userData.initialAngle + (2 * Math.PI * (diffDays / period));
-          child.position.set(orbitRadius * Math.cos(angle), 0, orbitRadius * Math.sin(angle));
+        // For Voyager probes, use linear escape trajectory
+        if (child.name === "Voyager 1" || child.name === "Voyager 2") {
+          // Compute time in days since launch
+          let dt = (simulationDate - child.userData.launchDate) / oneDay;
+          let newPos = child.userData.initialPosition.clone().add(child.userData.velocity.clone().multiplyScalar(dt));
+          child.position.copy(newPos);
+          // Update trajectory line geometry
+          if (child.userData.trajectoryLine) {
+            const positions = child.userData.trajectoryLine.geometry.attributes.position.array;
+            positions[0] = child.userData.initialPosition.x;
+            positions[1] = child.userData.initialPosition.y;
+            positions[2] = child.userData.initialPosition.z;
+            positions[3] = newPos.x;
+            positions[4] = newPos.y;
+            positions[5] = newPos.z;
+            child.userData.trajectoryLine.geometry.attributes.position.needsUpdate = true;
+          }
         }
       });
     }
@@ -500,11 +525,22 @@
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObjects(scene.children, true);
       console.log("Number of intersects:", intersects.length);
-      if (intersects.length > 0) {
-        const obj = intersects[0].object;
+      let targetObj = null;
+      for (let i = 0; i < intersects.length; i++) {
+        let o = intersects[i].object;
+        // Skip if object is part of an orbit trail or trajectory line
+        if (o.parent && (o.parent.type === "LineLoop" || o.parent.type === "Line")) {
+          continue;
+        }
+        if (o.name && o.name.trim() !== "") {
+          targetObj = o;
+          break;
+        }
+      }
+      if (targetObj) {
         const targetPosition = new THREE.Vector3();
-        obj.getWorldPosition(targetPosition);
-        console.log("Clicked object:", obj.name, "at", targetPosition);
+        targetObj.getWorldPosition(targetPosition);
+        console.log("Clicked object:", targetObj.name, "at", targetPosition);
         const direction = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
         const newCameraPos = targetPosition.clone().add(direction.multiplyScalar(10));
         let t = 0;
@@ -523,6 +559,8 @@
           }
         }
         animateCamera();
+      } else {
+        console.log("No valid object clicked.");
       }
     }
 
