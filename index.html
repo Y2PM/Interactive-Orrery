@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Interactive Orrery Simulation</title>
+  <title>Interactive Orrery Simulation - Debug Version</title>
   <style>
     body {
       margin: 0;
@@ -48,12 +48,12 @@
   </div>
   <canvas id="canvas"></canvas>
 
-  <!-- Use module imports for Three.js and OrbitControls v2-->
+  <!-- Module-based imports for Three.js and OrbitControls v3-->
   <script type="module">
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js';
     import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/controls/OrbitControls.js';
+    console.log("Modules loaded: THREE and OrbitControls.");
 
-    // Splendid! Prepare for a celestial display.
     let scene, camera, renderer, controls;
     let raycaster, mouse;
     let celestialObjects = [];
@@ -64,27 +64,38 @@
     animate();
 
     function init() {
+      console.log("Initialization started.");
       const canvas = document.getElementById('canvas');
+      if (!canvas) {
+        console.error("Canvas element not found!");
+        return;
+      }
       renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      console.log("Renderer created.");
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setClearColor(0x202020);
       scene = new THREE.Scene();
+      console.log("Scene created.");
 
       camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
       camera.position.set(0, 50, 100);
+      console.log("Camera created at position:", camera.position);
 
-      // Using OrbitControls from module import:
       controls = new OrbitControls(camera, renderer.domElement);
+      console.log("OrbitControls initialized.");
 
       raycaster = new THREE.Raycaster();
       mouse = new THREE.Vector2();
+      console.log("Raycaster and mouse vector created.");
 
-      // Lighting setup
+      // Lighting
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
       scene.add(ambientLight);
+      console.log("Ambient light added.");
       const pointLight = new THREE.PointLight(0xffffff, 1.5);
       pointLight.position.set(0, 0, 0); // Sun as the light source
       scene.add(pointLight);
+      console.log("Point light added at:", pointLight.position);
 
       // Create the Sun
       const sunGeometry = new THREE.SphereGeometry(3, 32, 32);
@@ -93,8 +104,9 @@
       sun.name = "Sun";
       scene.add(sun);
       celestialObjects.push({ mesh: sun, type: 'sun' });
+      console.log("Sun created and added to scene.");
 
-      // Planetary data (planets, moons, etc.)
+      // Define planetary data: each with moons, orbit radii, periods, etc.
       const planetsData = [
         { name: "Mercury", radius: 4, period: 88, size: 0.5, color: 0xaaaaaa, moons: [] },
         { name: "Venus",   radius: 7, period: 225, size: 0.8, color: 0xffcc66, moons: [] },
@@ -156,9 +168,11 @@
           };
           planetGroup.add(moonPivot);
           planetGroup.userData.moons.push(moonPivot);
+          console.log(`Moon ${moon.name} added to planet ${planet.name}.`);
         });
         scene.add(planetGroup);
         celestialObjects.push({ mesh: planetGroup, type: 'planet', data: planet });
+        console.log(`Planet ${planet.name} created with orbit radius ${planet.radius}.`);
       });
 
       // Create an asteroid belt
@@ -174,6 +188,7 @@
         asteroidGroup.add(asteroid);
       }
       scene.add(asteroidGroup);
+      console.log("Asteroid belt created with", asteroidCount, "asteroids.");
 
       // Add a probe (Voyager)
       const probeGeometry = new THREE.BoxGeometry(0.5, 0.5, 1);
@@ -187,17 +202,20 @@
       };
       scene.add(probe);
       celestialObjects.push({ mesh: probe, type: 'probe' });
+      console.log("Probe 'Voyager' added to the scene.");
 
-      // UI controls for simulation date and toggles
+      // UI Controls for date selection and toggles
       const dateSelector = document.getElementById('dateSelector');
       const currentDateBtn = document.getElementById('currentDateBtn');
       dateSelector.valueAsDate = new Date();
       dateSelector.addEventListener('change', (e) => {
         simulationDate = new Date(e.target.value);
+        console.log("Simulation date changed to:", simulationDate);
       });
       currentDateBtn.addEventListener('click', () => {
         simulationDate = new Date();
         dateSelector.valueAsDate = simulationDate;
+        console.log("Simulation date reset to current date:", simulationDate);
       });
       
       const darkModeToggle = document.getElementById('darkModeToggle');
@@ -205,8 +223,10 @@
         document.body.classList.toggle('dark-mode');
         if (document.body.classList.contains('dark-mode')) {
           renderer.setClearColor(0x202020);
+          console.log("Dark mode activated.");
         } else {
           renderer.setClearColor(0xffffff);
+          console.log("Dark mode deactivated.");
         }
       });
 
@@ -214,32 +234,38 @@
       resetViewBtn.addEventListener('click', () => {
         camera.position.set(0, 50, 100);
         controls.target.set(0, 0, 0);
+        console.log("View reset to default.");
       });
 
       window.addEventListener('click', onMouseClick, false);
       window.addEventListener('resize', onWindowResize, false);
+      console.log("Event listeners added.");
     }
 
     function onWindowResize() {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+      console.log("Window resized. New dimensions:", window.innerWidth, window.innerHeight);
     }
 
     function onMouseClick(event) {
       event.preventDefault();
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
       mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+      console.log("Mouse clicked at:", mouse.x, mouse.y);
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObjects(scene.children, true);
+      console.log("Number of intersects:", intersects.length);
       if (intersects.length > 0) {
         const obj = intersects[0].object;
         const targetPosition = new THREE.Vector3();
         obj.getWorldPosition(targetPosition);
+        console.log("Clicked object:", obj.name, "at position", targetPosition);
         const direction = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
         const newCameraPos = targetPosition.clone().add(direction.multiplyScalar(10));
         let t = 0;
-        const duration = 60;
+        const duration = 60; // frames for transition
         const initialPos = camera.position.clone();
         const initialTarget = controls.target.clone();
         function animateCamera() {
@@ -249,6 +275,8 @@
           controls.target.lerpVectors(initialTarget, targetPosition, factor);
           if (t < duration) {
             requestAnimationFrame(animateCamera);
+          } else {
+            console.log("Camera animation complete.");
           }
         }
         animateCamera();
@@ -258,7 +286,7 @@
     function updatePositions() {
       const diffTime = simulationDate - baseDate;
       const diffDays = diffTime / (1000 * 60 * 60 * 24);
-      
+      // Update positions for planets, moons, and probe
       scene.traverse(child => {
         if (child.type === "Group" && child.userData.orbitRadius) {
           const orbitRadius = child.userData.orbitRadius;
@@ -289,6 +317,8 @@
       updatePositions();
       controls.update();
       renderer.render(scene, camera);
+      // Log frame render if needed (uncomment below for verbose logging)
+      // console.log("Frame rendered.");
     }
   </script>
 </body>
