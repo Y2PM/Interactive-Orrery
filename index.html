@@ -30,7 +30,7 @@
       border-radius: 3px;
       cursor: pointer;
     }
-    /* Use a text input for the date picker, handled by Pikaday v12*/
+    /* Use a text input for the date picker, handled by Pikaday v13*/
     #dateSelector {
       width: 120px;
       background: #fff;
@@ -83,13 +83,14 @@
   </div>
   <canvas id="canvas"></canvas>
 
-  <!-- Load CSS2DRenderer from r127 via jsDelivr -->
+  <!-- Load Three.js first -->
+  <script src="./js/three.min.js"></script>
+  <!-- Then CSS2DRenderer (from r127) -->
   <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r127/examples/js/renderers/CSS2DRenderer.js"></script>
-  <!-- Moment.js and Pikaday for the calendar -->
+  <!-- Then Pikaday dependencies -->
   <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pikaday@1.8.2/pikaday.js"></script>
-  <!-- Load Three.js and OrbitControls (r127 non-module) -->
-  <script src="./js/three.min.js"></script>
+  <!-- Then OrbitControls -->
   <script src="./js/controls/OrbitControls.js"></script>
 
   <script>
@@ -187,11 +188,10 @@
       }
     });
 
+    // Fix reset view to explicitly set controls.target
     resetViewBtn.addEventListener('click', () => {
       camera.position.set(0, 50, 100);
-      // Safeguard: if controls.target is undefined, initialize it.
-      if (!controls.target) controls.target = new THREE.Vector3();
-      controls.target.set(0, 0, 0);
+      controls.target = new THREE.Vector3(0, 0, 0);
       console.log("View reset to default.");
     });
 
@@ -382,7 +382,7 @@
       console.log("Event listeners added.");
     }
 
-    // Create a label using CSS2DRenderer
+    // Create a label using CSS2DRenderer and attach to an object
     function createLabel(object, text) {
       const div = document.createElement('div');
       div.className = 'label';
@@ -393,7 +393,7 @@
       labels.push(label);
     }
 
-    // Create an orbital trail (circle) for a given orbit radius
+    // Create an orbital trail (a circular line loop) for a given orbit radius
     function createOrbitTrail(orbitRadius) {
       const segments = 64;
       const geometry = new THREE.BufferGeometry();
