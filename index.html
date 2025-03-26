@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Interactive Orrery - Branch 127 Version</title>
+  <title>Interactive Orrery - Branch 127 Version with Time Slider</title>
   <style>
     body {
       margin: 0;
@@ -29,8 +29,14 @@
       border-radius: 3px;
       cursor: pointer;
     }
-    #controls input[type="date"] {
-      color: #000;
+    /* Date picker styling (if browser supports it) v9*/
+    #dateSelector {
+      padding: 3px;
+    }
+    /* Slider styling */
+    #timeSlider {
+      width: 200px;
+      margin-top: 5px;
     }
     .dark-mode {
       background-color: #202020;
@@ -40,29 +46,35 @@
 </head>
 <body>
   <div id="controls">
-    <label for="dateSelector">Select Date:</label>
-    <input type="date" id="dateSelector">
-    <button id="currentDateBtn">Today</button>
-    <button id="darkModeToggle">Toggle Dark Mode</button>
-    <button id="resetViewBtn">Reset View</button>
+    <div>
+      <label for="dateSelector">Select Date:</label>
+      <input type="date" id="dateSelector">
+      <button id="currentDateBtn">Today</button>
+    </div>
+    <div>
+      <label for="timeSlider">Time Slider (days offset):</label>
+      <input type="range" id="timeSlider" min="0" max="3650" step="1" value="0">
+    </div>
+    <div>
+      <button id="darkModeToggle">Toggle Dark Mode</button>
+      <button id="resetViewBtn">Reset View</button>
+    </div>
   </div>
   <canvas id="canvas"></canvas>
 
-  <!-- Load branch 127 non-module versions v8-->
+  <!-- Load branch 127 non-module versions -->
   <script src="./js/three.min.js"></script>
   <script src="./js/controls/OrbitControls.js"></script>
 
   <script>
     console.log("Three.js and OrbitControls loaded.");
 
-    // Check if THREE is available
     if (typeof THREE !== "undefined") {
       console.log("THREE is loaded:", THREE);
     } else {
       console.error("THREE is not loaded!");
     }
 
-    // Check if OrbitControls are available (they should attach to THREE globally in r127)
     if (typeof THREE.OrbitControls !== "undefined") {
       console.log("OrbitControls are loaded:", THREE.OrbitControls);
     } else {
@@ -72,9 +84,69 @@
     let scene, camera, renderer, controls;
     let raycaster, mouse;
     let celestialObjects = [];
-    let baseDate = new Date("2000-01-01T00:00:00"); // Reference epoch
+    const baseDate = new Date("2000-01-01T00:00:00"); // Reference epoch
     let simulationDate = new Date();
 
+    // One day in milliseconds
+    const oneDay = 1000 * 60 * 60 * 24;
+
+    // Initialize UI elements
+    const dateSelector = document.getElementById('dateSelector');
+    const currentDateBtn = document.getElementById('currentDateBtn');
+    const timeSlider = document.getElementById('timeSlider');
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    const resetViewBtn = document.getElementById('resetViewBtn');
+
+    // Set initial date and slider value
+    dateSelector.valueAsDate = simulationDate;
+    // Slider value is days difference from baseDate
+    timeSlider.value = Math.floor((simulationDate - baseDate) / oneDay);
+
+    // When date is changed, update simulationDate and slider
+    dateSelector.addEventListener('change', (e) => {
+      simulationDate = new Date(e.target.value);
+      timeSlider.value = Math.floor((simulationDate - baseDate) / oneDay);
+      console.log("Simulation date changed to:", simulationDate);
+    });
+
+    // When slider is moved, update simulationDate and date input
+    timeSlider.addEventListener('input', (e) => {
+      const daysOffset = parseInt(e.target.value);
+      simulationDate = new Date(baseDate.getTime() + daysOffset * oneDay);
+      // Format simulationDate to YYYY-MM-DD for date input
+      const yyyy = simulationDate.getFullYear();
+      const mm = String(simulationDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(simulationDate.getDate()).padStart(2, '0');
+      dateSelector.value = `${yyyy}-${mm}-${dd}`;
+      console.log("Time slider updated simulation date to:", simulationDate);
+    });
+
+    // "Today" button resets simulationDate to current date
+    currentDateBtn.addEventListener('click', () => {
+      simulationDate = new Date();
+      dateSelector.valueAsDate = simulationDate;
+      timeSlider.value = Math.floor((simulationDate - baseDate) / oneDay);
+      console.log("Simulation date reset to current date:", simulationDate);
+    });
+
+    darkModeToggle.addEventListener('click', () => {
+      document.body.classList.toggle('dark-mode');
+      if (document.body.classList.contains('dark-mode')) {
+        renderer.setClearColor(0x202020);
+        console.log("Dark mode activated.");
+      } else {
+        renderer.setClearColor(0xffffff);
+        console.log("Dark mode deactivated.");
+      }
+    });
+
+    resetViewBtn.addEventListener('click', () => {
+      camera.position.set(0, 50, 100);
+      controls.target.set(0, 0, 0);
+      console.log("View reset to default.");
+    });
+
+    // Set up Three.js basics
     init();
     animate();
 
@@ -86,37 +158,31 @@
         return;
       }
 
-      // Renderer
       renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
       console.log("Renderer created.");
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setClearColor(0x202020);
 
-      // Scene
       scene = new THREE.Scene();
       console.log("Scene created.");
 
-      // Camera
       camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
       camera.position.set(0, 50, 100);
       console.log("Camera created at position:", camera.position);
 
-      // OrbitControls (from branch 127, non-module version)
       controls = new THREE.OrbitControls(camera, renderer.domElement);
       console.log("OrbitControls initialized.");
 
-      // Raycaster for object selection
       raycaster = new THREE.Raycaster();
       mouse = new THREE.Vector2();
       console.log("Raycaster and mouse vector created.");
 
-      // Lighting
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
       scene.add(ambientLight);
       console.log("Ambient light added.");
 
       const pointLight = new THREE.PointLight(0xffffff, 1.5);
-      pointLight.position.set(0, 0, 0); // Sun as the light source
+      pointLight.position.set(0, 0, 0);
       scene.add(pointLight);
       console.log("Point light added at:", pointLight.position);
 
@@ -227,39 +293,7 @@
       celestialObjects.push({ mesh: probe, type: 'probe' });
       console.log("Probe 'Voyager' added to the scene.");
 
-      // UI Controls
-      const dateSelector = document.getElementById('dateSelector');
-      const currentDateBtn = document.getElementById('currentDateBtn');
-      dateSelector.valueAsDate = new Date();
-      dateSelector.addEventListener('change', (e) => {
-        simulationDate = new Date(e.target.value);
-        console.log("Simulation date changed to:", simulationDate);
-      });
-      currentDateBtn.addEventListener('click', () => {
-        simulationDate = new Date();
-        dateSelector.valueAsDate = simulationDate;
-        console.log("Simulation date reset to current date:", simulationDate);
-      });
-      
-      const darkModeToggle = document.getElementById('darkModeToggle');
-      darkModeToggle.addEventListener('click', () => {
-        document.body.classList.toggle('dark-mode');
-        if (document.body.classList.contains('dark-mode')) {
-          renderer.setClearColor(0x202020);
-          console.log("Dark mode activated.");
-        } else {
-          renderer.setClearColor(0xffffff);
-          console.log("Dark mode deactivated.");
-        }
-      });
-
-      const resetViewBtn = document.getElementById('resetViewBtn');
-      resetViewBtn.addEventListener('click', () => {
-        camera.position.set(0, 50, 100);
-        controls.target.set(0, 0, 0);
-        console.log("View reset to default.");
-      });
-
+      // Set up event listeners for canvas clicks and window resize
       window.addEventListener('click', onMouseClick, false);
       window.addEventListener('resize', onWindowResize, false);
       console.log("Event listeners added.");
@@ -286,11 +320,11 @@
         obj.getWorldPosition(targetPosition);
         console.log("Clicked object:", obj.name, "at position", targetPosition);
 
-        // Calculate a new camera position for a smooth zoom
+        // Smooth camera zoom transition
         const direction = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
         const newCameraPos = targetPosition.clone().add(direction.multiplyScalar(10));
         let t = 0;
-        const duration = 60; // frames for a smooth transition
+        const duration = 60;
         const initialPos = camera.position.clone();
         const initialTarget = controls.target.clone();
 
@@ -309,19 +343,20 @@
       }
     }
 
+    // Update positions based solely on simulationDate.
     function updatePositions() {
       const diffTime = simulationDate - baseDate;
-      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+      const diffDays = diffTime / oneDay;
 
       scene.traverse(child => {
-        // For planets and groups with orbit data
+        // Update orbital positions for planets (and their moons)
         if (child.type === "Group" && child.userData.orbitRadius) {
           const orbitRadius = child.userData.orbitRadius;
           const period = child.userData.orbitalPeriod;
           const angle = child.userData.initialAngle + (2 * Math.PI * (diffDays / period));
           child.position.set(orbitRadius * Math.cos(angle), 0, orbitRadius * Math.sin(angle));
 
-          // Update moons
+          // Update moons (positions remain relative to planet rotation)
           if (child.userData.moons) {
             child.userData.moons.forEach(moonPivot => {
               const mPeriod = moonPivot.userData.orbitalPeriod;
@@ -329,18 +364,15 @@
               moonPivot.rotation.y = mAngle;
             });
           }
-
-          // Spin the planet itself
-          child.rotation.y += 0.01;
+          // (Removed continuous spin so moons and planets move only when simulationDate changes)
         }
 
-        // Update probe's orbit
+        // Update probe's orbit based solely on simulationDate.
         if (child.userData.orbitRadius && child.name === "Voyager") {
           const orbitRadius = child.userData.orbitRadius;
           const period = child.userData.orbitalPeriod;
           const angle = child.userData.initialAngle + (2 * Math.PI * (diffDays / period));
           child.position.set(orbitRadius * Math.cos(angle), 0, orbitRadius * Math.sin(angle));
-          child.rotation.x += 0.01;
         }
       });
     }
@@ -350,8 +382,6 @@
       updatePositions();
       controls.update();
       renderer.render(scene, camera);
-      // Uncomment the following line for verbose per-frame logging if needed:
-      // console.log("Frame rendered.");
     }
   </script>
 </body>
