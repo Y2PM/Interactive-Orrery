@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Interactive Orrery - Non-Module Version</title>
+  <title>Interactive Orrery - Branch 127 Version</title>
   <style>
     body {
       margin: 0;
@@ -48,8 +48,7 @@
   </div>
   <canvas id="canvas"></canvas>
 
-  <!-- Load Three.js and OrbitControls using standard script tags v7-->
-  <!-- Ensure three.min.js is the pre-bundled file with no internal imports -->
+  <!-- Load branch 127 non-module versions v8-->
   <script src="./js/three.min.js"></script>
   <script src="./js/controls/OrbitControls.js"></script>
 
@@ -63,7 +62,7 @@
       console.error("THREE is not loaded!");
     }
 
-    // Check if OrbitControls is available
+    // Check if OrbitControls are available (they should attach to THREE globally in r127)
     if (typeof THREE.OrbitControls !== "undefined") {
       console.log("OrbitControls are loaded:", THREE.OrbitControls);
     } else {
@@ -102,7 +101,7 @@
       camera.position.set(0, 50, 100);
       console.log("Camera created at position:", camera.position);
 
-      // OrbitControls (from the global THREE namespace)
+      // OrbitControls (from branch 127, non-module version)
       controls = new THREE.OrbitControls(camera, renderer.domElement);
       console.log("OrbitControls initialized.");
 
@@ -315,14 +314,14 @@
       const diffDays = diffTime / (1000 * 60 * 60 * 24);
 
       scene.traverse(child => {
-        // Planets, etc.
+        // For planets and groups with orbit data
         if (child.type === "Group" && child.userData.orbitRadius) {
           const orbitRadius = child.userData.orbitRadius;
           const period = child.userData.orbitalPeriod;
           const angle = child.userData.initialAngle + (2 * Math.PI * (diffDays / period));
           child.position.set(orbitRadius * Math.cos(angle), 0, orbitRadius * Math.sin(angle));
 
-          // Moons
+          // Update moons
           if (child.userData.moons) {
             child.userData.moons.forEach(moonPivot => {
               const mPeriod = moonPivot.userData.orbitalPeriod;
@@ -331,11 +330,11 @@
             });
           }
 
-          // Spin the planet
+          // Spin the planet itself
           child.rotation.y += 0.01;
         }
 
-        // Probe
+        // Update probe's orbit
         if (child.userData.orbitRadius && child.name === "Voyager") {
           const orbitRadius = child.userData.orbitRadius;
           const period = child.userData.orbitalPeriod;
@@ -351,7 +350,8 @@
       updatePositions();
       controls.update();
       renderer.render(scene, camera);
-      // console.log("Frame rendered."); // Uncomment if you want extra logging per frame
+      // Uncomment the following line for verbose per-frame logging if needed:
+      // console.log("Frame rendered.");
     }
   </script>
 </body>
