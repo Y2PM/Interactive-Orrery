@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <title>Interactive Orrery Simulation</title>
   <style>
-    /* General styles and dark mode support */
     body {
       margin: 0;
       overflow: hidden;
@@ -49,11 +48,12 @@
   </div>
   <canvas id="canvas"></canvas>
 
-  <!-- Three.js library and OrbitControls from CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script>
-  <script>
-    // Right then, Sir Mr Bannert, prepare yourself for an orrery of splendid design.
+  <!-- Use module imports for Three.js and OrbitControls v2-->
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js';
+    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/controls/OrbitControls.js';
+
+    // Splendid! Prepare for a celestial display.
     let scene, camera, renderer, controls;
     let raycaster, mouse;
     let celestialObjects = [];
@@ -64,29 +64,26 @@
     animate();
 
     function init() {
-      // Set up the renderer and scene
       const canvas = document.getElementById('canvas');
       renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setClearColor(0x202020);
       scene = new THREE.Scene();
-      
-      // Configure the camera
+
       camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
       camera.position.set(0, 50, 100);
-      
-      // Establish OrbitControls for interactive navigation
-      controls = new THREE.OrbitControls(camera, renderer.domElement);
-      
-      // Set up raycaster for object selection and zooming
+
+      // Using OrbitControls from module import:
+      controls = new OrbitControls(camera, renderer.domElement);
+
       raycaster = new THREE.Raycaster();
       mouse = new THREE.Vector2();
 
-      // Lighting: ambient light and a point light emulating the Sun
+      // Lighting setup
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
       scene.add(ambientLight);
       const pointLight = new THREE.PointLight(0xffffff, 1.5);
-      pointLight.position.set(0, 0, 0); // The Sun is our light source
+      pointLight.position.set(0, 0, 0); // Sun as the light source
       scene.add(pointLight);
 
       // Create the Sun
@@ -97,7 +94,7 @@
       scene.add(sun);
       celestialObjects.push({ mesh: sun, type: 'sun' });
 
-      // Define planetary data: name, orbit radius (arbitrary units), orbital period (in days), size, colour and moon details.
+      // Planetary data (planets, moons, etc.)
       const planetsData = [
         { name: "Mercury", radius: 4, period: 88, size: 0.5, color: 0xaaaaaa, moons: [] },
         { name: "Venus",   radius: 7, period: 225, size: 0.8, color: 0xffcc66, moons: [] },
@@ -125,28 +122,25 @@
         { name: "Neptune", radius: 29, period: 60190, size: 1.5, color: 0x3366ff, moons: [
             { name: "Triton", orbit: 3, period: 5, size: 0.35, color: 0x9999ff }
           ] },
-        { name: "Pluto",  radius: 33, period: 90560, size: 0.6, color: 0xcccccc, moons: [
+        { name: "Pluto",   radius: 33, period: 90560, size: 0.6, color: 0xcccccc, moons: [
             { name: "Charon", orbit: 1.5, period: 6.4, size: 0.3, color: 0x888888 }
           ] }
       ];
 
-      // Create each planet and its moons using a group for organised transformations.
+      // Create planets and their moons
       planetsData.forEach(planet => {
         const planetGroup = new THREE.Group();
-        // The planet sphere itself
         const geometry = new THREE.SphereGeometry(planet.size, 32, 32);
         const material = new THREE.MeshStandardMaterial({ color: planet.color });
         const planetMesh = new THREE.Mesh(geometry, material);
         planetMesh.name = planet.name;
         planetGroup.add(planetMesh);
-        // Store orbit information in the group's userData for dynamic updates
         planetGroup.userData = {
           orbitRadius: planet.radius,
           orbitalPeriod: planet.period,
           initialAngle: Math.random() * Math.PI * 2,
           moons: []
         };
-        // Create moons, if any, each with its own pivot for orbiting
         planet.moons.forEach(moon => {
           const moonGeometry = new THREE.SphereGeometry(moon.size, 16, 16);
           const moonMaterial = new THREE.MeshStandardMaterial({ color: moon.color });
@@ -167,7 +161,7 @@
         celestialObjects.push({ mesh: planetGroup, type: 'planet', data: planet });
       });
 
-      // Assemble an asteroid belt between Mars and Jupiter
+      // Create an asteroid belt
       const asteroidGroup = new THREE.Group();
       const asteroidCount = 100;
       for (let i = 0; i < asteroidCount; i++) {
@@ -181,20 +175,20 @@
       }
       scene.add(asteroidGroup);
 
-      // Introduce a probe (Voyager) placed further out
+      // Add a probe (Voyager)
       const probeGeometry = new THREE.BoxGeometry(0.5, 0.5, 1);
       const probeMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
       const probe = new THREE.Mesh(probeGeometry, probeMaterial);
       probe.name = "Voyager";
       probe.userData = {
         orbitRadius: 38,
-        orbitalPeriod: 150000, // Arbitrarily slow
+        orbitalPeriod: 150000,
         initialAngle: Math.random() * Math.PI * 2
       };
       scene.add(probe);
       celestialObjects.push({ mesh: probe, type: 'probe' });
 
-      // Set up UI controls for date selection and view toggling
+      // UI controls for simulation date and toggles
       const dateSelector = document.getElementById('dateSelector');
       const currentDateBtn = document.getElementById('currentDateBtn');
       dateSelector.valueAsDate = new Date();
@@ -222,7 +216,6 @@
         controls.target.set(0, 0, 0);
       });
 
-      // Allow clicking on objects to zoom in via raycasting
       window.addEventListener('click', onMouseClick, false);
       window.addEventListener('resize', onWindowResize, false);
     }
@@ -243,11 +236,10 @@
         const obj = intersects[0].object;
         const targetPosition = new THREE.Vector3();
         obj.getWorldPosition(targetPosition);
-        // Calculate a new camera position for a pleasing close-up
         const direction = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
         const newCameraPos = targetPosition.clone().add(direction.multiplyScalar(10));
         let t = 0;
-        const duration = 60; // frames for a smooth transition
+        const duration = 60;
         const initialPos = camera.position.clone();
         const initialTarget = controls.target.clone();
         function animateCamera() {
@@ -264,18 +256,15 @@
     }
 
     function updatePositions() {
-      // Calculate elapsed days from the base date to drive orbital motions
       const diffTime = simulationDate - baseDate;
       const diffDays = diffTime / (1000 * 60 * 60 * 24);
       
-      // Traverse scene objects to update planet and probe positions and rotations
       scene.traverse(child => {
         if (child.type === "Group" && child.userData.orbitRadius) {
           const orbitRadius = child.userData.orbitRadius;
           const period = child.userData.orbitalPeriod;
           const angle = child.userData.initialAngle + (2 * Math.PI * (diffDays / period));
           child.position.set(orbitRadius * Math.cos(angle), 0, orbitRadius * Math.sin(angle));
-          // Update moon rotations
           if (child.userData.moons) {
             child.userData.moons.forEach(moonPivot => {
               const mPeriod = moonPivot.userData.orbitalPeriod;
@@ -283,7 +272,6 @@
               moonPivot.rotation.y = mAngle;
             });
           }
-          // Simulate the planet’s own axial spin
           child.rotation.y += 0.01;
         }
         if (child.userData.orbitRadius && child.name === "Voyager") {
