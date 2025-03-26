@@ -48,10 +48,10 @@
   </div>
   <canvas id="canvas"></canvas>
 
-  <!-- Module-based imports for Three.js and OrbitControls v3-->
+  <!-- Module-based imports for Three.js and OrbitControls v4-->
   <script type="module">
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js';
-    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/controls/OrbitControls.js';
+    import * as THREE from './js/three.module.js';
+    import { OrbitControls } from './js/OrbitControls.js';
     console.log("Modules loaded: THREE and OrbitControls.");
 
     let scene, camera, renderer, controls;
