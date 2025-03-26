@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Enhanced Interactive Orrery with Realistic Voyager</title>
+  <title>Enhanced Interactive Orrery with Voyager Fixes</title>
   <style>
     body {
       margin: 0;
@@ -56,7 +56,7 @@
       white-space: nowrap;
     }
   </style>
-  <!-- Pikaday CSS v18-->
+  <!-- Pikaday CSS v19-->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pikaday/css/pikaday.css">
 </head>
 <body>
@@ -96,8 +96,9 @@
     let scene, camera, renderer, controls, labelRenderer;
     let raycaster, mouse;
     let celestialObjects = [];
-    let orbitTrails = []; // will now include planet orbits + probe lines
+    let orbitTrails = []; // includes planet orbits + probe lines
     let labels = [];
+
     const baseDate = new Date("2000-01-01T00:00:00");
     let simulationDate = new Date();
     const oneDay = 1000 * 60 * 60 * 24;
@@ -110,21 +111,21 @@
     let asteroidBeltGroup, kuiperBeltGroup;
 
     // DOM elements
-    const dateField = document.getElementById('dateSelector');
-    const currentDateBtn = document.getElementById('currentDateBtn');
-    const timeSlider = document.getElementById('timeSlider');
-    const playPauseBtn = document.getElementById('playPauseBtn');
-    const toggleScaleBtn = document.getElementById('toggleScaleBtn');
+    const dateField       = document.getElementById('dateSelector');
+    const currentDateBtn  = document.getElementById('currentDateBtn');
+    const timeSlider      = document.getElementById('timeSlider');
+    const playPauseBtn    = document.getElementById('playPauseBtn');
+    const toggleScaleBtn  = document.getElementById('toggleScaleBtn');
     const toggleTrailsBtn = document.getElementById('toggleTrailsBtn');
     const toggleLabelsBtn = document.getElementById('toggleLabelsBtn');
-    const darkModeToggle = document.getElementById('darkModeToggle');
-    const resetViewBtn = document.getElementById('resetViewBtn');
+    const darkModeToggle  = document.getElementById('darkModeToggle');
+    const resetViewBtn    = document.getElementById('resetViewBtn');
 
-    // Initialize Pikaday
+    // Pikaday date picker
     let pikaday = new Pikaday({
       field: dateField,
       format: 'YYYY-MM-DD',
-      onSelect: function(date) {
+      onSelect: (date) => {
         simulationDate = date;
         timeSlider.value = Math.floor((simulationDate - baseDate) / oneDay);
         console.log("Date changed via Pikaday:", simulationDate);
@@ -157,19 +158,13 @@
       scaleFactor = (scaleFactor === 1) ? 5 : 1;
       console.log("Scale factor toggled to:", scaleFactor);
       recreateTrails();
-      if (asteroidBeltGroup) {
-        asteroidBeltGroup.scale.set(scaleFactor, scaleFactor, scaleFactor);
-      }
-      if (kuiperBeltGroup) {
-        kuiperBeltGroup.scale.set(scaleFactor, scaleFactor, scaleFactor);
-      }
+      if (asteroidBeltGroup) asteroidBeltGroup.scale.set(scaleFactor, scaleFactor, scaleFactor);
+      if (kuiperBeltGroup)  kuiperBeltGroup.scale.set(scaleFactor, scaleFactor, scaleFactor);
     });
 
     toggleTrailsBtn.addEventListener('click', () => {
       trailsVisible = !trailsVisible;
-      orbitTrails.forEach(trail => {
-        trail.visible = trailsVisible;
-      });
+      orbitTrails.forEach(trail => { trail.visible = trailsVisible; });
       console.log("Trails toggled. Visible?", trailsVisible);
     });
 
@@ -217,7 +212,6 @@
     animate();
 
     function init() {
-      console.log("Initialization started.");
       const canvas = document.getElementById('canvas');
       renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
@@ -238,6 +232,7 @@
       raycaster = new THREE.Raycaster();
       mouse = new THREE.Vector2();
 
+      // Lights
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
       scene.add(ambientLight);
       const pointLight = new THREE.PointLight(0xffffff, 1.5);
@@ -253,30 +248,30 @@
       celestialObjects.push({ mesh: sun, type: 'sun' });
       createLabel(sun, "Sun");
 
-      // Planetary data
+      // Planet data
       const planetsData = [
-        { name: "Mercury", radius: 4, period: 88, size: 0.5, color: 0xaaaaaa, moons: [] },
-        { name: "Venus",   radius: 7, period: 225, size: 0.8, color: 0xffcc66, moons: [] },
-        { name: "Earth",   radius: 10, period: 365, size: 0.9, color: 0x2233ff, moons: [
-            { name: "Moon", orbit: 1.5, period: 27, size: 0.3, color: 0x888888 }
+        { name: "Mercury", radius: 4,  period: 88,   size: 0.5, color: 0xaaaaaa, moons: [] },
+        { name: "Venus",   radius: 7,  period: 225,  size: 0.8, color: 0xffcc66, moons: [] },
+        { name: "Earth",   radius: 10, period: 365,  size: 0.9, color: 0x2233ff, moons: [
+            { name: "Moon", orbit: 1.5, period: 27,   size: 0.3, color: 0x888888 }
           ] },
-        { name: "Mars",    radius: 13, period: 687, size: 0.7, color: 0xff3300, moons: [
-            { name: "Phobos", orbit: 1, period: 0.3, size: 0.15, color: 0x999999 },
-            { name: "Deimos", orbit: 1.5, period: 1.3, size: 0.1, color: 0xbbbbbb }
+        { name: "Mars",    radius: 13, period: 687,  size: 0.7, color: 0xff3300, moons: [
+            { name: "Phobos", orbit: 1,   period: 0.3, size: 0.15, color: 0x999999 },
+            { name: "Deimos", orbit: 1.5, period: 1.3, size: 0.1,  color: 0xbbbbbb }
           ] },
-        { name: "Jupiter", radius: 17, period: 4333, size: 2, color: 0xffaa77, moons: [
-            { name: "Io", orbit: 2.5, period: 1.8, size: 0.3, color: 0xffddaa },
-            { name: "Europa", orbit: 3, period: 3.5, size: 0.28, color: 0xffffff },
-            { name: "Ganymede", orbit: 3.5, period: 7, size: 0.4, color: 0xcccccc },
-            { name: "Callisto", orbit: 4, period: 16, size: 0.35, color: 0x999999 }
+        { name: "Jupiter", radius: 17, period: 4333, size: 2,   color: 0xffaa77, moons: [
+            { name: "Io",       orbit: 2.5, period: 1.8,  size: 0.3,  color: 0xffddaa },
+            { name: "Europa",   orbit: 3,   period: 3.5,  size: 0.28, color: 0xffffff },
+            { name: "Ganymede", orbit: 3.5, period: 7,    size: 0.4,  color: 0xcccccc },
+            { name: "Callisto", orbit: 4,   period: 16,   size: 0.35, color: 0x999999 }
           ] },
         { name: "Saturn",  radius: 21, period: 10759, size: 1.8, color: 0xffeeaa, moons: [
-            { name: "Titan", orbit: 3, period: 16, size: 0.4, color: 0xffcc99 },
-            { name: "Enceladus", orbit: 2, period: 1.4, size: 0.2, color: 0xdddddd }
+            { name: "Titan",     orbit: 3, period: 16,  size: 0.4,  color: 0xffcc99 },
+            { name: "Enceladus", orbit: 2, period: 1.4, size: 0.2,  color: 0xdddddd }
           ] },
         { name: "Uranus",  radius: 25, period: 30687, size: 1.5, color: 0x66ccff, moons: [
-            { name: "Titania", orbit: 2.5, period: 8, size: 0.3, color: 0xccccff },
-            { name: "Oberon", orbit: 3, period: 12, size: 0.3, color: 0xbbbbff }
+            { name: "Titania", orbit: 2.5, period: 8,  size: 0.3, color: 0xccccff },
+            { name: "Oberon",  orbit: 3,   period: 12, size: 0.3, color: 0xbbbbff }
           ] },
         { name: "Neptune", radius: 29, period: 60190, size: 1.5, color: 0x3366ff, moons: [
             { name: "Triton", orbit: 3, period: 5, size: 0.35, color: 0x9999ff }
@@ -286,13 +281,14 @@
           ] }
       ];
 
-      // Create planets
+      // Create planet groups
       planetsData.forEach(planet => {
         const planetGroup = new THREE.Group();
         const geometry = new THREE.SphereGeometry(planet.size, 32, 32);
         const material = new THREE.MeshStandardMaterial({ color: planet.color });
         const planetMesh = new THREE.Mesh(geometry, material);
         planetMesh.name = planet.name;
+
         planetGroup.add(planetMesh);
         planetGroup.userData = {
           orbitRadius: planet.radius,
@@ -300,8 +296,8 @@
           initialAngle: Math.random() * Math.PI * 2,
           moons: []
         };
+
         createLabel(planetMesh, planet.name);
-        // Create each moon
         planet.moons.forEach(moon => {
           const moonGeometry = new THREE.SphereGeometry(moon.size, 16, 16);
           const moonMaterial = new THREE.MeshStandardMaterial({ color: moon.color });
@@ -309,6 +305,7 @@
           moonMesh.position.x = moon.orbit;
           moonMesh.name = moon.name;
           createLabel(moonMesh, moon.name);
+
           const moonPivot = new THREE.Group();
           moonPivot.add(moonMesh);
           moonPivot.userData = {
@@ -319,9 +316,10 @@
           planetGroup.add(moonPivot);
           planetGroup.userData.moons.push(moonPivot);
         });
+
         scene.add(planetGroup);
-        celestialObjects.push({ mesh: planetGroup, type: 'planet', data: planet });
-        createOrbitTrail(planetGroup.userData.orbitRadius * scaleFactor);
+        celestialObjects.push({ mesh: planetGroup, type: 'planet' });
+        createOrbitTrail(planet.radius * scaleFactor);
       });
 
       // Asteroid Belt
@@ -337,7 +335,7 @@
         asteroidBeltGroup.add(asteroid);
       }
       scene.add(asteroidBeltGroup);
-      createLabel(asteroidBeltGroup, "Asteroid Belt", {x:16, y:5, z:0});
+      createLabel(asteroidBeltGroup, "Asteroid Belt", { x:16, y:5, z:0 });
 
       // Kuiper Belt
       kuiperBeltGroup = new THREE.Group();
@@ -352,17 +350,17 @@
         kuiperBeltGroup.add(kuiperObj);
       }
       scene.add(kuiperBeltGroup);
-      createLabel(kuiperBeltGroup, "Kuiper Belt", {x:40, y:5, z:0});
+      createLabel(kuiperBeltGroup, "Kuiper Belt", { x:40, y:5, z:0 });
 
-      // Create Voyagers with "escape" from Earth
-      createVoyager("Voyager 1",  new Date("1977-09-05"), 38, 0.02);
-      createVoyager("Voyager 2",  new Date("1977-08-20"), 42, -0.02);
+      // Voyagers
+      createVoyagerProbe("Voyager 1",  new Date("1977-09-05"),  0xff0000, 0.02);
+      createVoyagerProbe("Voyager 2",  new Date("1977-08-20"),  0xff6600, -0.02);
 
-      window.addEventListener('resize', onWindowResize, false);
-      console.log("Event listeners added.");
+      window.addEventListener('resize', onWindowResize);
+      console.log("Initialization complete.");
     }
 
-    // Create a label for an object
+    // Create a label
     function createLabel(object, text, offset) {
       const div = document.createElement('div');
       div.className = 'label';
@@ -377,7 +375,7 @@
       labels.push(label);
     }
 
-    // Create a circular orbit trail
+    // Create a planet orbit trail
     function createOrbitTrail(orbitRadius) {
       const segments = 64;
       const geometry = new THREE.BufferGeometry();
@@ -393,119 +391,130 @@
       orbitTrails.push(line);
     }
 
-    // Helper to get Earth's position for a given date (for probe initial positions)
-    function getEarthPositionForDate(date) {
-      // We'll mimic the same logic used in updatePositions for Earth
-      // Earth: radius=10, period=365, initialAngle=some random, but let's fix it to 0 for simplicity
-      const earthOrbitRadius = 10 * scaleFactor;
+    // Return Earth's position for a given date (assuming Earth's angle=0 at baseDate)
+    function getEarthPosition(date) {
+      const earthRadius = 10 * scaleFactor;
       const earthPeriod = 365;
       const diffDays = (date - baseDate) / oneDay;
-      const angle = 0 + (2 * Math.PI * (diffDays / earthPeriod)); // no random offset
+      // For simplicity, no random offset
+      const angle = (2 * Math.PI * diffDays / earthPeriod);
       return new THREE.Vector3(
-        earthOrbitRadius * Math.cos(angle),
+        earthRadius * Math.cos(angle),
         0,
-        earthOrbitRadius * Math.sin(angle)
+        earthRadius * Math.sin(angle)
       );
     }
 
-    // Create a Voyager probe with an escape trajectory from Earth
-    function createVoyager(name, launchDate, distanceAU, velocityY) {
-      const probeGeom = new THREE.BoxGeometry(0.5, 0.5, 1);
-      const probeMat  = new THREE.MeshStandardMaterial({ color: (name==="Voyager 1") ? 0xff0000 : 0xff6600 });
-      const probe     = new THREE.Mesh(probeGeom, probeMat);
-      probe.name      = name;
+    // Create a Voyager probe that starts from Earth
+    function createVoyagerProbe(name, launchDate, color, velocityY) {
+      // Make the probe geometry bigger so it's visible
+      const probeGeometry = new THREE.BoxGeometry(1, 1, 2);
+      const probeMaterial = new THREE.MeshStandardMaterial({ color });
+      const probe = new THREE.Mesh(probeGeometry, probeMaterial);
+      probe.name = name;
 
-      // Compute Earth's position at launch date
-      const earthPosAtLaunch = getEarthPositionForDate(launchDate);
-      // We'll offset by 'distanceAU' if you want them out beyond Earth, or set distanceAU=0 if you want them exactly at Earth
-      const directionFromEarth = earthPosAtLaunch.clone().normalize();
-      const launchOffset = directionFromEarth.multiplyScalar(distanceAU - 10); 
-      // 10 is Earth's radius, so distanceAU - 10 is how much further from Earth we place it
+      // Earth position on launch
+      const earthPos = getEarthPosition(launchDate);
+      // We'll place the probe at Earth + small offset in direction from Sun
+      const direction = earthPos.clone().normalize();
+      const offset = direction.multiplyScalar(2); // 2 units outward from Earth
+      probe.position.copy(earthPos).add(offset);
 
-      probe.position.copy(earthPosAtLaunch.clone().add(launchOffset));
-
-      // We'll store data so we can update the position linearly
+      // Store userData for linear update
       probe.userData = {
-        type: 'probe',
-        launchDate: launchDate,
+        isProbe: true,
+        name,
+        launchDate,
         earthLaunchPos: probe.position.clone(),
-        velocity: new THREE.Vector3(0, velocityY, 0), // up or down from the plane
+        velocity: new THREE.Vector3(0, velocityY, 0), // up or down from ecliptic
       };
 
       scene.add(probe);
-      createLabel(probe, name + " Escape Path");
+      createLabel(probe, `${name} Escape Path`);
       celestialObjects.push({ mesh: probe, type: 'probe' });
 
-      // Create a line from EarthLaunchPos -> currentPos
+      // Also create a line from earthLaunchPos -> currentPos
       const lineGeom = new THREE.BufferGeometry();
+      // 2 points: Earth Launch, Current
       const linePositions = new Float32Array(6);
       lineGeom.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
       const lineMat = new THREE.LineBasicMaterial({ color: 0xffff00 });
       const line = new THREE.Line(lineGeom, lineMat);
       scene.add(line);
-      orbitTrails.push(line); // so we can toggle it
+      orbitTrails.push(line);
       probe.userData.trajectoryLine = line;
     }
 
-    // Recreate planet orbit trails after scale changes
+    // Recreate planet orbit trails after toggling scale
     function recreateTrails() {
-      orbitTrails.forEach(line => scene.remove(line));
+      orbitTrails.forEach(trail => scene.remove(trail));
       orbitTrails = [];
-      // Recreate planet orbits only (probes have lines updated in updatePositions)
+      // Recreate planet orbits
       for (let obj of celestialObjects) {
         if (obj.type === 'planet') {
-          const r = obj.mesh.userData.orbitRadius;
-          if (r !== undefined) {
-            createOrbitTrail(r * scaleFactor);
+          const radius = obj.mesh.userData.orbitRadius;
+          if (radius !== undefined) {
+            createOrbitTrail(radius * scaleFactor);
           }
+        }
+      }
+      // Re-add lines for Voyagers
+      for (let obj of celestialObjects) {
+        if (obj.type === 'probe') {
+          const lineGeom = new THREE.BufferGeometry();
+          const linePositions = new Float32Array(6);
+          lineGeom.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+          const lineMat = new THREE.LineBasicMaterial({ color: 0xffff00 });
+          const line = new THREE.Line(lineGeom, lineMat);
+          scene.add(line);
+          orbitTrails.push(line);
+          obj.mesh.userData.trajectoryLine = line;
         }
       }
     }
 
+    // Called each frame
     function updatePositions() {
       const diffDays = (simulationDate - baseDate) / oneDay;
+      // Update planet orbits
       scene.traverse(child => {
-        // If child is a planet group
         if (child.type === "Group" && child.userData.orbitRadius) {
-          const orbitRadius = child.userData.orbitRadius * scaleFactor;
+          const r = child.userData.orbitRadius * scaleFactor;
           const period = child.userData.orbitalPeriod;
-          const angle = child.userData.initialAngle + (2 * Math.PI * (diffDays / period));
-          child.position.set(
-            orbitRadius * Math.cos(angle),
-            0,
-            orbitRadius * Math.sin(angle)
-          );
-          // Update moons
+          const angle = child.userData.initialAngle + 2*Math.PI*(diffDays / period);
+          child.position.set(r*Math.cos(angle), 0, r*Math.sin(angle));
           if (child.userData.moons) {
             child.userData.moons.forEach(moonPivot => {
-              const mPeriod = moonPivot.userData.orbitalPeriod;
-              const mAngle = moonPivot.userData.initialAngle + (2 * Math.PI * (diffDays / mPeriod));
+              const mAngle = moonPivot.userData.initialAngle + 2*Math.PI*(diffDays / moonPivot.userData.orbitalPeriod);
               moonPivot.rotation.y = mAngle;
             });
           }
         }
-
-        // If child is a probe (Voyager)
-        if (child.userData && child.userData.launchDate) {
-          const dt = (simulationDate - child.userData.launchDate) / oneDay;
+      });
+      // Update probes
+      for (let obj of celestialObjects) {
+        if (obj.type === 'probe') {
+          const mesh = obj.mesh;
+          const dt = (simulationDate - mesh.userData.launchDate)/oneDay;
           // position = earthLaunchPos + velocity * dt
-          const newPos = child.userData.earthLaunchPos.clone()
-            .add(child.userData.velocity.clone().multiplyScalar(dt));
-          child.position.copy(newPos);
-
-          // Update line: from earthLaunchPos -> newPos
-          if (child.userData.trajectoryLine) {
-            const linePositions = child.userData.trajectoryLine.geometry.attributes.position.array;
-            linePositions[0] = child.userData.earthLaunchPos.x;
-            linePositions[1] = child.userData.earthLaunchPos.y;
-            linePositions[2] = child.userData.earthLaunchPos.z;
+          const newPos = mesh.userData.earthLaunchPos.clone()
+            .add(mesh.userData.velocity.clone().multiplyScalar(dt));
+          mesh.position.copy(newPos);
+          // Update line geometry
+          if (mesh.userData.trajectoryLine) {
+            const linePositions = mesh.userData.trajectoryLine.geometry.attributes.position.array;
+            // Start at earthLaunchPos
+            linePositions[0] = mesh.userData.earthLaunchPos.x;
+            linePositions[1] = mesh.userData.earthLaunchPos.y;
+            linePositions[2] = mesh.userData.earthLaunchPos.z;
+            // End at newPos
             linePositions[3] = newPos.x;
             linePositions[4] = newPos.y;
             linePositions[5] = newPos.z;
-            child.userData.trajectoryLine.geometry.attributes.position.needsUpdate = true;
+            mesh.userData.trajectoryLine.geometry.attributes.position.needsUpdate = true;
           }
         }
-      });
+      }
     }
 
     function onCanvasClick(event) {
@@ -513,44 +522,40 @@
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
       mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
       raycaster.setFromCamera(mouse, camera);
+
       const intersects = raycaster.intersectObjects(scene.children, true);
       console.log("Number of intersects:", intersects.length);
 
       let targetObj = null;
       for (let i = 0; i < intersects.length; i++) {
         const obj = intersects[i].object;
-        // If it's a line (orbit or trajectory), skip
-        if (obj.isLine) continue;
-        // If it has a name, let's pick it
-        if (obj.name && obj.name.trim() !== "") {
+        if (obj.isLine) continue;         // skip lines
+        if (obj.name && obj.name.trim()) {
           targetObj = obj;
           break;
         }
       }
 
       if (targetObj) {
-        const targetPosition = new THREE.Vector3();
-        targetObj.getWorldPosition(targetPosition);
-        console.log("Clicked object:", targetObj.name, "at", targetPosition);
+        const targetPos = new THREE.Vector3();
+        targetObj.getWorldPosition(targetPos);
+        console.log("Clicked object:", targetObj.name, "at", targetPos);
 
         const direction = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
-        const newCameraPos = targetPosition.clone().add(direction.multiplyScalar(10));
+        const newCameraPos = targetPos.clone().add(direction.multiplyScalar(10));
 
         let t = 0;
         const duration = 60;
-        const initialPos = camera.position.clone();
-        const initialTarget = controls.target.clone();
+        const initPos = camera.position.clone();
+        const initTarget = controls.target.clone();
 
         function animateCamera() {
           t++;
           const factor = t / duration;
-          camera.position.lerpVectors(initialPos, newCameraPos, factor);
-          controls.target.lerpVectors(initialTarget, targetPosition, factor);
-          if (t < duration) {
-            requestAnimationFrame(animateCamera);
-          } else {
-            console.log("Camera animation complete.");
-          }
+          camera.position.lerpVectors(initPos, newCameraPos, factor);
+          controls.target.lerpVectors(initTarget, targetPos, factor);
+          if (t < duration) requestAnimationFrame(animateCamera);
+          else console.log("Camera animation complete.");
         }
         animateCamera();
       } else {
@@ -568,8 +573,8 @@
     function animate() {
       requestAnimationFrame(animate);
       if (!timePaused) {
-        simulationDate = new Date(simulationDate.getTime() + playSpeed * oneDay);
-        const daysOffset = Math.floor((simulationDate - baseDate) / oneDay);
+        simulationDate = new Date(simulationDate.getTime() + playSpeed*oneDay);
+        const daysOffset = Math.floor((simulationDate - baseDate)/oneDay);
         timeSlider.value = daysOffset;
         pikaday.setDate(simulationDate, true);
       }
