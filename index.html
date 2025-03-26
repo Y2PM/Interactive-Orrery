@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Interactive Orrery - Branch 127 Version with Time Slider</title>
+  <title>Interactive Orrery - with Calendar Picker & Kuiper Belt</title>
   <style>
     body {
       margin: 0;
@@ -20,7 +20,8 @@
       padding: 10px;
       border-radius: 5px;
     }
-    #controls input, #controls button {
+    #controls button,
+    #controls input {
       margin: 5px;
       padding: 5px;
       background: #333;
@@ -29,11 +30,16 @@
       border-radius: 3px;
       cursor: pointer;
     }
-    /* Date picker styling (if browser supports it) v9*/
+    /* We no longer rely on type="date" since Safari won't show a dropdown. v10
+       Instead we use Pikaday, so we do <input type="text"> and let Pikaday handle the calendar. */
     #dateSelector {
+      width: 120px;
+      background: #fff;
+      color: #000;
+      border-radius: 3px;
+      border: 1px solid #ccc;
       padding: 3px;
     }
-    /* Slider styling */
     #timeSlider {
       width: 200px;
       margin-top: 5px;
@@ -43,12 +49,19 @@
       color: #fff;
     }
   </style>
+
+  <!-- Pikaday CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pikaday/css/pikaday.css">
+  <!-- Moment.js (required by Pikaday for date formatting) -->
+  <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+  <!-- Pikaday for a cross-browser date picker -->
+  <script src="https://cdn.jsdelivr.net/npm/pikaday@1.8.2/pikaday.js"></script>
 </head>
 <body>
   <div id="controls">
     <div>
       <label for="dateSelector">Select Date:</label>
-      <input type="date" id="dateSelector">
+      <input type="text" id="dateSelector" placeholder="YYYY-MM-DD">
       <button id="currentDateBtn">Today</button>
     </div>
     <div>
@@ -60,75 +73,76 @@
       <button id="resetViewBtn">Reset View</button>
     </div>
   </div>
+
   <canvas id="canvas"></canvas>
 
-  <!-- Load branch 127 non-module versions -->
+  <!-- Three.js and OrbitControls (non-module, from r127) -->
   <script src="./js/three.min.js"></script>
   <script src="./js/controls/OrbitControls.js"></script>
 
   <script>
     console.log("Three.js and OrbitControls loaded.");
 
-    if (typeof THREE !== "undefined") {
-      console.log("THREE is loaded:", THREE);
-    } else {
+    // Quick checks
+    if (typeof THREE === "undefined") {
       console.error("THREE is not loaded!");
     }
-
-    if (typeof THREE.OrbitControls !== "undefined") {
-      console.log("OrbitControls are loaded:", THREE.OrbitControls);
-    } else {
+    if (typeof THREE.OrbitControls === "undefined") {
       console.error("OrbitControls are not loaded!");
     }
 
+    // Core variables
     let scene, camera, renderer, controls;
     let raycaster, mouse;
     let celestialObjects = [];
     const baseDate = new Date("2000-01-01T00:00:00"); // Reference epoch
     let simulationDate = new Date();
+    const oneDay = 1000 * 60 * 60 * 24; // 1 day in ms
 
-    // One day in milliseconds
-    const oneDay = 1000 * 60 * 60 * 24;
-
-    // Initialize UI elements
-    const dateSelector = document.getElementById('dateSelector');
+    // DOM elements
     const currentDateBtn = document.getElementById('currentDateBtn');
     const timeSlider = document.getElementById('timeSlider');
     const darkModeToggle = document.getElementById('darkModeToggle');
     const resetViewBtn = document.getElementById('resetViewBtn');
+    const dateField = document.getElementById('dateSelector');
 
-    // Set initial date and slider value
-    dateSelector.valueAsDate = simulationDate;
-    // Slider value is days difference from baseDate
-    timeSlider.value = Math.floor((simulationDate - baseDate) / oneDay);
-
-    // When date is changed, update simulationDate and slider
-    dateSelector.addEventListener('change', (e) => {
-      simulationDate = new Date(e.target.value);
-      timeSlider.value = Math.floor((simulationDate - baseDate) / oneDay);
-      console.log("Simulation date changed to:", simulationDate);
+    // PIKADAY: cross-browser date picker
+    let pikaday = new Pikaday({
+      field: dateField,
+      format: 'YYYY-MM-DD',
+      onSelect: function(date) {
+        // Update the simulation date and slider whenever user picks from calendar
+        simulationDate = date;
+        const daysOffset = Math.floor((simulationDate - baseDate) / oneDay);
+        timeSlider.value = daysOffset;
+        console.log("Date changed via Pikaday to:", simulationDate);
+      }
     });
 
-    // When slider is moved, update simulationDate and date input
-    timeSlider.addEventListener('input', (e) => {
-      const daysOffset = parseInt(e.target.value);
+    // Set initial date in the date picker
+    pikaday.setDate(simulationDate, true); // 'true' to not trigger onSelect
+
+    // Sync the slider to the current date
+    timeSlider.value = Math.floor((simulationDate - baseDate) / oneDay);
+
+    // Listen for manual changes on the slider
+    timeSlider.addEventListener('input', () => {
+      const daysOffset = parseInt(timeSlider.value);
       simulationDate = new Date(baseDate.getTime() + daysOffset * oneDay);
-      // Format simulationDate to YYYY-MM-DD for date input
-      const yyyy = simulationDate.getFullYear();
-      const mm = String(simulationDate.getMonth() + 1).padStart(2, '0');
-      const dd = String(simulationDate.getDate()).padStart(2, '0');
-      dateSelector.value = `${yyyy}-${mm}-${dd}`;
+      // Also update the date picker
+      pikaday.setDate(simulationDate, true);
       console.log("Time slider updated simulation date to:", simulationDate);
     });
 
-    // "Today" button resets simulationDate to current date
+    // "Today" button
     currentDateBtn.addEventListener('click', () => {
       simulationDate = new Date();
-      dateSelector.valueAsDate = simulationDate;
+      pikaday.setDate(simulationDate, true);
       timeSlider.value = Math.floor((simulationDate - baseDate) / oneDay);
       console.log("Simulation date reset to current date:", simulationDate);
     });
 
+    // Dark mode toggle
     darkModeToggle.addEventListener('click', () => {
       document.body.classList.toggle('dark-mode');
       if (document.body.classList.contains('dark-mode')) {
@@ -140,13 +154,14 @@
       }
     });
 
+    // Reset view
     resetViewBtn.addEventListener('click', () => {
       camera.position.set(0, 50, 100);
       controls.target.set(0, 0, 0);
       console.log("View reset to default.");
     });
 
-    // Set up Three.js basics
+    // Init Three.js scene
     init();
     animate();
 
@@ -159,9 +174,9 @@
       }
 
       renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-      console.log("Renderer created.");
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setClearColor(0x202020);
+      console.log("Renderer created.");
 
       scene = new THREE.Scene();
       console.log("Scene created.");
@@ -177,14 +192,13 @@
       mouse = new THREE.Vector2();
       console.log("Raycaster and mouse vector created.");
 
+      // Lighting
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
       scene.add(ambientLight);
-      console.log("Ambient light added.");
 
       const pointLight = new THREE.PointLight(0xffffff, 1.5);
-      pointLight.position.set(0, 0, 0);
+      pointLight.position.set(0, 0, 0); // Our "Sun" is the light source
       scene.add(pointLight);
-      console.log("Point light added at:", pointLight.position);
 
       // Create the Sun
       const sunGeometry = new THREE.SphereGeometry(3, 32, 32);
@@ -193,32 +207,31 @@
       sun.name = "Sun";
       scene.add(sun);
       celestialObjects.push({ mesh: sun, type: 'sun' });
-      console.log("Sun created and added to scene.");
 
-      // Define planetary data
+      // Planet data
       const planetsData = [
-        { name: "Mercury", radius: 4, period: 88, size: 0.5, color: 0xaaaaaa, moons: [] },
-        { name: "Venus",   radius: 7, period: 225, size: 0.8, color: 0xffcc66, moons: [] },
-        { name: "Earth",   radius: 10, period: 365, size: 0.9, color: 0x2233ff, moons: [
-            { name: "Moon", orbit: 1.5, period: 27, size: 0.3, color: 0x888888 }
+        { name: "Mercury", radius: 4,  period: 88,   size: 0.5, color: 0xaaaaaa, moons: [] },
+        { name: "Venus",   radius: 7,  period: 225,  size: 0.8, color: 0xffcc66, moons: [] },
+        { name: "Earth",   radius: 10, period: 365,  size: 0.9, color: 0x2233ff, moons: [
+            { name: "Moon", orbit: 1.5, period: 27,   size: 0.3, color: 0x888888 }
           ] },
-        { name: "Mars",    radius: 13, period: 687, size: 0.7, color: 0xff3300, moons: [
-            { name: "Phobos", orbit: 1, period: 0.3, size: 0.15, color: 0x999999 },
-            { name: "Deimos", orbit: 1.5, period: 1.3, size: 0.1, color: 0xbbbbbb }
+        { name: "Mars",    radius: 13, period: 687,  size: 0.7, color: 0xff3300, moons: [
+            { name: "Phobos", orbit: 1,   period: 0.3, size: 0.15, color: 0x999999 },
+            { name: "Deimos", orbit: 1.5, period: 1.3, size: 0.1,  color: 0xbbbbbb }
           ] },
-        { name: "Jupiter", radius: 17, period: 4333, size: 2, color: 0xffaa77, moons: [
-            { name: "Io", orbit: 2.5, period: 1.8, size: 0.3, color: 0xffddaa },
-            { name: "Europa", orbit: 3, period: 3.5, size: 0.28, color: 0xffffff },
-            { name: "Ganymede", orbit: 3.5, period: 7, size: 0.4, color: 0xcccccc },
-            { name: "Callisto", orbit: 4, period: 16, size: 0.35, color: 0x999999 }
+        { name: "Jupiter", radius: 17, period: 4333, size: 2,   color: 0xffaa77, moons: [
+            { name: "Io",       orbit: 2.5, period: 1.8,  size: 0.3,  color: 0xffddaa },
+            { name: "Europa",   orbit: 3,   period: 3.5,  size: 0.28, color: 0xffffff },
+            { name: "Ganymede", orbit: 3.5, period: 7,    size: 0.4,  color: 0xcccccc },
+            { name: "Callisto", orbit: 4,   period: 16,   size: 0.35, color: 0x999999 }
           ] },
         { name: "Saturn",  radius: 21, period: 10759, size: 1.8, color: 0xffeeaa, moons: [
-            { name: "Titan", orbit: 3, period: 16, size: 0.4, color: 0xffcc99 },
+            { name: "Titan",     orbit: 3, period: 16,  size: 0.4, color: 0xffcc99 },
             { name: "Enceladus", orbit: 2, period: 1.4, size: 0.2, color: 0xdddddd }
           ] },
         { name: "Uranus",  radius: 25, period: 30687, size: 1.5, color: 0x66ccff, moons: [
-            { name: "Titania", orbit: 2.5, period: 8, size: 0.3, color: 0xccccff },
-            { name: "Oberon", orbit: 3, period: 12, size: 0.3, color: 0xbbbbff }
+            { name: "Titania", orbit: 2.5, period: 8,  size: 0.3, color: 0xccccff },
+            { name: "Oberon",  orbit: 3,   period: 12, size: 0.3, color: 0xbbbbff }
           ] },
         { name: "Neptune", radius: 29, period: 60190, size: 1.5, color: 0x3366ff, moons: [
             { name: "Triton", orbit: 3, period: 5, size: 0.35, color: 0x9999ff }
@@ -228,7 +241,7 @@
           ] }
       ];
 
-      // Create planets and their moons
+      // Create planets
       planetsData.forEach(planet => {
         const planetGroup = new THREE.Group();
         const geometry = new THREE.SphereGeometry(planet.size, 32, 32);
@@ -236,12 +249,15 @@
         const planetMesh = new THREE.Mesh(geometry, material);
         planetMesh.name = planet.name;
         planetGroup.add(planetMesh);
+
         planetGroup.userData = {
           orbitRadius: planet.radius,
           orbitalPeriod: planet.period,
           initialAngle: Math.random() * Math.PI * 2,
           moons: []
         };
+
+        // Moons
         planet.moons.forEach(moon => {
           const moonGeometry = new THREE.SphereGeometry(moon.size, 16, 16);
           const moonMaterial = new THREE.MeshStandardMaterial({ color: moon.color });
@@ -250,67 +266,97 @@
           moonMesh.name = moon.name;
           const moonPivot = new THREE.Group();
           moonPivot.add(moonMesh);
+
           moonPivot.userData = {
             orbitRadius: moon.orbit,
             orbitalPeriod: moon.period,
             initialAngle: Math.random() * Math.PI * 2
           };
+
           planetGroup.add(moonPivot);
           planetGroup.userData.moons.push(moonPivot);
           console.log(`Moon ${moon.name} added to planet ${planet.name}.`);
         });
+
         scene.add(planetGroup);
         celestialObjects.push({ mesh: planetGroup, type: 'planet', data: planet });
         console.log(`Planet ${planet.name} created with orbit radius ${planet.radius}.`);
       });
 
-      // Create an asteroid belt
-      const asteroidGroup = new THREE.Group();
-      const asteroidCount = 100;
-      for (let i = 0; i < asteroidCount; i++) {
+      // "Kuiper Belt" or "Asteroid Belt" (whichever you prefer) out beyond Pluto:
+      const beltGroup = new THREE.Group();
+      const beltCount = 100;
+      for (let i = 0; i < beltCount; i++) {
         const asteroidGeometry = new THREE.SphereGeometry(0.1, 8, 8);
         const asteroidMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
         const asteroid = new THREE.Mesh(asteroidGeometry, asteroidMaterial);
-        const angle = Math.random() * Math.PI * 2;
-        const distance = 15 + Math.random() * 2;
-        asteroid.position.set(distance * Math.cos(angle), (Math.random() - 0.5) * 0.5, distance * Math.sin(angle));
-        asteroidGroup.add(asteroid);
-      }
-      scene.add(asteroidGroup);
-      console.log("Asteroid belt created with", asteroidCount, "asteroids.");
 
-      // Add a probe (Voyager)
+        // Place them between 35 and 40 radius (beyond Pluto at 33)
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 35 + Math.random() * 5; 
+        asteroid.position.set(distance * Math.cos(angle), (Math.random() - 0.5) * 1, distance * Math.sin(angle));
+
+        beltGroup.add(asteroid);
+      }
+      scene.add(beltGroup);
+      console.log(`"Kuiper" belt created with ${beltCount} objects.`);
+
+      // Voyager probe (the red lego block)
       const probeGeometry = new THREE.BoxGeometry(0.5, 0.5, 1);
       const probeMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
       const probe = new THREE.Mesh(probeGeometry, probeMaterial);
-      probe.name = "Voyager";
+      probe.name = "Voyager"; // The red block
       probe.userData = {
-        orbitRadius: 38,
-        orbitalPeriod: 150000,
+        orbitRadius: 38,         // Just beyond Pluto
+        orbitalPeriod: 150000,   // Arbitrary slow orbit
         initialAngle: Math.random() * Math.PI * 2
       };
       scene.add(probe);
       celestialObjects.push({ mesh: probe, type: 'probe' });
       console.log("Probe 'Voyager' added to the scene.");
 
-      // Set up event listeners for canvas clicks and window resize
+      // Event listeners
       window.addEventListener('click', onMouseClick, false);
       window.addEventListener('resize', onWindowResize, false);
       console.log("Event listeners added.");
     }
 
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      console.log("Window resized. New dimensions:", window.innerWidth, window.innerHeight);
+    // Recalculate positions based on the simulation date
+    function updatePositions() {
+      const diffTime = simulationDate - baseDate;
+      const diffDays = diffTime / oneDay;
+
+      scene.traverse(child => {
+        // Planets or groups with orbit data
+        if (child.type === "Group" && child.userData.orbitRadius) {
+          const orbitRadius = child.userData.orbitRadius;
+          const period = child.userData.orbitalPeriod;
+          const angle = child.userData.initialAngle + (2 * Math.PI * (diffDays / period));
+          child.position.set(orbitRadius * Math.cos(angle), 0, orbitRadius * Math.sin(angle));
+
+          // Moons revolve around their planet
+          if (child.userData.moons) {
+            child.userData.moons.forEach(moonPivot => {
+              const mPeriod = moonPivot.userData.orbitalPeriod;
+              const mAngle = moonPivot.userData.initialAngle + (2 * Math.PI * (diffDays / mPeriod));
+              moonPivot.rotation.y = mAngle;
+            });
+          }
+        }
+        // Probe orbit
+        if (child.userData.orbitRadius && child.name === "Voyager") {
+          const orbitRadius = child.userData.orbitRadius;
+          const period = child.userData.orbitalPeriod;
+          const angle = child.userData.initialAngle + (2 * Math.PI * (diffDays / period));
+          child.position.set(orbitRadius * Math.cos(angle), 0, orbitRadius * Math.sin(angle));
+        }
+      });
     }
 
     function onMouseClick(event) {
       event.preventDefault();
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
       mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
-      console.log("Mouse clicked at:", mouse.x, mouse.y);
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObjects(scene.children, true);
       console.log("Number of intersects:", intersects.length);
@@ -318,9 +364,9 @@
         const obj = intersects[0].object;
         const targetPosition = new THREE.Vector3();
         obj.getWorldPosition(targetPosition);
-        console.log("Clicked object:", obj.name, "at position", targetPosition);
+        console.log("Clicked object:", obj.name, "at", targetPosition);
 
-        // Smooth camera zoom transition
+        // Smooth camera move
         const direction = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
         const newCameraPos = targetPosition.clone().add(direction.multiplyScalar(10));
         let t = 0;
@@ -343,38 +389,11 @@
       }
     }
 
-    // Update positions based solely on simulationDate.
-    function updatePositions() {
-      const diffTime = simulationDate - baseDate;
-      const diffDays = diffTime / oneDay;
-
-      scene.traverse(child => {
-        // Update orbital positions for planets (and their moons)
-        if (child.type === "Group" && child.userData.orbitRadius) {
-          const orbitRadius = child.userData.orbitRadius;
-          const period = child.userData.orbitalPeriod;
-          const angle = child.userData.initialAngle + (2 * Math.PI * (diffDays / period));
-          child.position.set(orbitRadius * Math.cos(angle), 0, orbitRadius * Math.sin(angle));
-
-          // Update moons (positions remain relative to planet rotation)
-          if (child.userData.moons) {
-            child.userData.moons.forEach(moonPivot => {
-              const mPeriod = moonPivot.userData.orbitalPeriod;
-              const mAngle = moonPivot.userData.initialAngle + (2 * Math.PI * (diffDays / mPeriod));
-              moonPivot.rotation.y = mAngle;
-            });
-          }
-          // (Removed continuous spin so moons and planets move only when simulationDate changes)
-        }
-
-        // Update probe's orbit based solely on simulationDate.
-        if (child.userData.orbitRadius && child.name === "Voyager") {
-          const orbitRadius = child.userData.orbitRadius;
-          const period = child.userData.orbitalPeriod;
-          const angle = child.userData.initialAngle + (2 * Math.PI * (diffDays / period));
-          child.position.set(orbitRadius * Math.cos(angle), 0, orbitRadius * Math.sin(angle));
-        }
-      });
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      console.log("Window resized. New dimensions:", window.innerWidth, window.innerHeight);
     }
 
     function animate() {
