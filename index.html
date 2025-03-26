@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Interactive Orrery Simulation - Debug Version</title>
+  <title>Interactive Orrery - Non-Module Version</title>
   <style>
     body {
       margin: 0;
@@ -48,11 +48,27 @@
   </div>
   <canvas id="canvas"></canvas>
 
-  <!-- Module-based imports for Three.js and OrbitControls v6-->
-  <script type="module">
-    import * as THREE from './js/three.min.js';
-    import { OrbitControls } from './js/controls/OrbitControls.js';
-    console.log("Modules loaded: THREE and OrbitControls.");
+  <!-- Load Three.js and OrbitControls using standard script tags v7-->
+  <!-- Ensure three.min.js is the pre-bundled file with no internal imports -->
+  <script src="./js/three.min.js"></script>
+  <script src="./js/controls/OrbitControls.js"></script>
+
+  <script>
+    console.log("Three.js and OrbitControls loaded.");
+
+    // Check if THREE is available
+    if (typeof THREE !== "undefined") {
+      console.log("THREE is loaded:", THREE);
+    } else {
+      console.error("THREE is not loaded!");
+    }
+
+    // Check if OrbitControls is available
+    if (typeof THREE.OrbitControls !== "undefined") {
+      console.log("OrbitControls are loaded:", THREE.OrbitControls);
+    } else {
+      console.error("OrbitControls are not loaded!");
+    }
 
     let scene, camera, renderer, controls;
     let raycaster, mouse;
@@ -70,20 +86,27 @@
         console.error("Canvas element not found!");
         return;
       }
+
+      // Renderer
       renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
       console.log("Renderer created.");
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setClearColor(0x202020);
+
+      // Scene
       scene = new THREE.Scene();
       console.log("Scene created.");
 
+      // Camera
       camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
       camera.position.set(0, 50, 100);
       console.log("Camera created at position:", camera.position);
 
-      controls = new OrbitControls(camera, renderer.domElement);
+      // OrbitControls (from the global THREE namespace)
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
       console.log("OrbitControls initialized.");
 
+      // Raycaster for object selection
       raycaster = new THREE.Raycaster();
       mouse = new THREE.Vector2();
       console.log("Raycaster and mouse vector created.");
@@ -92,6 +115,7 @@
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
       scene.add(ambientLight);
       console.log("Ambient light added.");
+
       const pointLight = new THREE.PointLight(0xffffff, 1.5);
       pointLight.position.set(0, 0, 0); // Sun as the light source
       scene.add(pointLight);
@@ -106,7 +130,7 @@
       celestialObjects.push({ mesh: sun, type: 'sun' });
       console.log("Sun created and added to scene.");
 
-      // Define planetary data: each with moons, orbit radii, periods, etc.
+      // Define planetary data
       const planetsData = [
         { name: "Mercury", radius: 4, period: 88, size: 0.5, color: 0xaaaaaa, moons: [] },
         { name: "Venus",   radius: 7, period: 225, size: 0.8, color: 0xffcc66, moons: [] },
@@ -204,7 +228,7 @@
       celestialObjects.push({ mesh: probe, type: 'probe' });
       console.log("Probe 'Voyager' added to the scene.");
 
-      // UI Controls for date selection and toggles
+      // UI Controls
       const dateSelector = document.getElementById('dateSelector');
       const currentDateBtn = document.getElementById('currentDateBtn');
       dateSelector.valueAsDate = new Date();
@@ -262,12 +286,15 @@
         const targetPosition = new THREE.Vector3();
         obj.getWorldPosition(targetPosition);
         console.log("Clicked object:", obj.name, "at position", targetPosition);
+
+        // Calculate a new camera position for a smooth zoom
         const direction = new THREE.Vector3().subVectors(camera.position, controls.target).normalize();
         const newCameraPos = targetPosition.clone().add(direction.multiplyScalar(10));
         let t = 0;
-        const duration = 60; // frames for transition
+        const duration = 60; // frames for a smooth transition
         const initialPos = camera.position.clone();
         const initialTarget = controls.target.clone();
+
         function animateCamera() {
           t++;
           const factor = t / duration;
@@ -286,13 +313,16 @@
     function updatePositions() {
       const diffTime = simulationDate - baseDate;
       const diffDays = diffTime / (1000 * 60 * 60 * 24);
-      // Update positions for planets, moons, and probe
+
       scene.traverse(child => {
+        // Planets, etc.
         if (child.type === "Group" && child.userData.orbitRadius) {
           const orbitRadius = child.userData.orbitRadius;
           const period = child.userData.orbitalPeriod;
           const angle = child.userData.initialAngle + (2 * Math.PI * (diffDays / period));
           child.position.set(orbitRadius * Math.cos(angle), 0, orbitRadius * Math.sin(angle));
+
+          // Moons
           if (child.userData.moons) {
             child.userData.moons.forEach(moonPivot => {
               const mPeriod = moonPivot.userData.orbitalPeriod;
@@ -300,8 +330,12 @@
               moonPivot.rotation.y = mAngle;
             });
           }
+
+          // Spin the planet
           child.rotation.y += 0.01;
         }
+
+        // Probe
         if (child.userData.orbitRadius && child.name === "Voyager") {
           const orbitRadius = child.userData.orbitRadius;
           const period = child.userData.orbitalPeriod;
@@ -317,8 +351,7 @@
       updatePositions();
       controls.update();
       renderer.render(scene, camera);
-      // Log frame render if needed (uncomment below for verbose logging)
-      // console.log("Frame rendered.");
+      // console.log("Frame rendered."); // Uncomment if you want extra logging per frame
     }
   </script>
 </body>
